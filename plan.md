@@ -12,7 +12,6 @@ Design in `DESIGN.md`, measurements in `docs/research.md`.
 | --- | --- | --- | --- | --- | --- |
 | T24 | todo | P1 | 3 | 0% | |
 | T21 | todo | P2 | 5 | 0% | |
-| T30.1 | todo | P2 | 3 | 0% | |
 | T38.1 | todo | P2 | 3 | 0% | |
 | T42 | todo | P2 | 3 | 0% | |
 
@@ -108,16 +107,6 @@ State: `just check` is green (128 tests run on macOS) and both cross targets com
 Suggested split if the creator wants it smaller: (a) test environment + item 2 — now T24,
 (b) identity and the signature change, (c) NTFS compression, (d) ReFS cloning, (e) paths and
 docs.
-
-### T30.1. Swift: Xcode DerivedData
-
-Split off from T30. `~/Library/Developer/Xcode/DerivedData/<name>-<hash>/`, with `info.plist`
-recording `WorkspacePath`, which makes `orphans` and `evict` direct. No lock: needs the quiet
-tier (T29), with `xcodebuild`, `XCBBuildService` and `SWBBuildService` as the tools. `plutil`
-reads the plist without a new dependency. Needs a way to produce a DerivedData dir for tests
-without writing into the real `~/Library` (`xcodebuild -derivedDataPath` in a temp dir is the
-candidate; whether it writes `info.plist` there is the first thing to check). Oracle: a second
-`xcodebuild` compiles nothing.
 
 ### T38.1. Monorepo: an owner for a build dir outside its checkout
 

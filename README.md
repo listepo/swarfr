@@ -179,7 +179,15 @@ running build makes the package busy exactly as a cargo build does. Only the bui
 worked on (`.build/out`, or `.build/<triple>` from the older build system); dependency checkouts
 and the mmapped compilation cache are left alone, and dedupe uses clones only. On
 swift-argument-parser built in debug and release, `.build` went from 357 MiB to 157 MiB and the
-next `swift build` compiled nothing (`docs/bench.md`). Xcode's DerivedData is not handled yet.
+next `swift build` compiled nothing (`docs/bench.md`).
+
+Xcode's DerivedData entries are found by the `info.plist` holding the `WorkspacePath` they were
+built from, once DerivedData is named as a root (`~/Library/Developer/Xcode/DerivedData`):
+nothing under `~/Library` is read unless asked. Xcode takes no lock either, so they get the
+no-lock tier, and a build service holding any file of an entry open makes it busy, not only one
+working there. An entry whose workspace, project or package is gone shows up as such. On
+swift-argument-parser built in debug and release, the entry went from 320 MiB to 222 MiB and the
+next `xcodebuild` compiled nothing (`docs/bench.md`).
 
 .NET projects are found by `obj/project.assets.json`: their `obj/` and `bin/` go through the
 passes too. MSBuild takes no lock, so they get the tier for build systems without one: files

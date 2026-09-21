@@ -40,3 +40,62 @@ pass. The creator approved installing `ninja` and `meson`; both are in the globa
   info, or holding its source, is refused; a real Meson project with the same oracle.
 - `~/.cache/dunnage` is absent, and no `_.build.lock` is left in `$TMPDIR`.
 
+### T30.1. Swift: Xcode DerivedData
+
+Split off from T30. `~/Library/Developer/Xcode/DerivedData/<name>-<hash>/`, with `info.plist`
+recording `WorkspacePath`, which makes `orphans` and `evict` direct. No lock: needs the quiet
+tier (T29), with `xcodebuild`, `XCBBuildService` and `SWBBuildService` as the tools. `plutil`
+reads the plist without a new dependency. Needs a way to produce a DerivedData dir for tests
+without writing into the real `~/Library` (`xcodebuild -derivedDataPath` in a temp dir is the
+candidate; whether it writes `info.plist` there is the first thing to check). Oracle: a second
+`xcodebuild` compiles nothing.
+
+The creator approved testing on DerivedData. Only `-derivedDataPath` dirs in temp dirs are
+written; the real `~/Library/Developer/Xcode/DerivedData` is read at most.
+
+#### Execution plan
+
+1. Spike: `xcodebuild` on a Swift package in a temp dir with `-derivedDataPath`; what it
+   writes (`info.plist`, `WorkspacePath`, `LastAccessedDate`), which processes run, and whether
+   a second build is a no-op.
+2. `src/eco/xcode.rs`: claim a dir holding `info.plist` with `WorkspacePath` next to `Build/`
+   or `Logs/`; owner from the plist through `plutil`; `Guard::Quiet`, tools `xcodebuild`,
+   `XCBBuildService`, `SWBBuildService`; `well_known` or a documented root for
+   `~/Library/Developer/Xcode/DerivedData`, decided by what the spike shows.
+3. Tests: fixtures for claim and owner; where `xcodebuild` exists, a real package built into a
+   temp DerivedData, aged, a run, and a second `xcodebuild` compiles nothing. Docs, toolchain.
+
+#### Result
+
+- `xcodebuild -derivedDataPath` in a temp dir writes an XML `info.plist` with `WorkspacePath`
+  and `LastAccessedDate` next to `Build/`, `Logs/` and the caches; nothing lands in the real
+  `~/Library`. A second build prints no compile or link step.
+- Xcode takes no lock. `SWBBuildService` works from a dir inside Xcode.app and holds `build.db`
+  and the compilation cache open, so a current-dir check alone misses it: `sys::Held` now
+  carries open files too, and on macOS a file inside a quiet unit held open by one of the tools
+  makes the unit busy. Linux still reads current dirs only.
+- `src/eco/xcode.rs`, registered last: claim needs `info.plist` with a `WorkspacePath` outside
+  the dir and `Build/` or `Logs/`; a binary plist goes through `/usr/bin/plutil`; the manifest
+  is the project or workspace bundle, or `Package.swift`. Tools `xcodebuild`, `SWBBuildService`,
+  `XCBBuildService`, `Xcode`; clones only. Not in `well_known`: DerivedData is a root the user
+  names, as the library reads no home dir.
+- The build database records output mtimes: moving an entry's files back relinks, and switching
+  Debug and Release recompiles a few files, with or without the tool.
+- Bench on swift-argument-parser, Debug and Release: 319.9 MiB to 221.5 MiB (−30.7%), 127 MiB
+  of files rewritten while the builds settled stayed under the one-day floor.
+- Docs: README, usage, DESIGN "Xcode" and the no-lock tier, ecosystems, architecture, bench,
+  toolchain (xcodebuild, plutil).
+
+#### Verified
+
+- `just check` (213 tests) and `just check-cross` pass.
+- `tests/xcode.rs`: claim, owner, manifest and `project_gone` from fixtures; a plist alone, a
+  workspace inside the dir and a plist without `WorkspacePath` are refused; `tail -f` under a
+  tool's name holding a file open makes the entry busy, and without it the entry is worked on;
+  a real package built into a temp DerivedData, after compress and dedupe, builds nothing and
+  its binary runs.
+- The bench entry: `xcodebuild` afterwards compiles and links nothing, and `math` runs from both
+  configurations.
+- `~/.cache/dunnage` is absent, no `_.build.lock` is left in `$TMPDIR`, and the real DerivedData
+  gained nothing.
+

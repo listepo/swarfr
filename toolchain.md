@@ -15,6 +15,7 @@ too slow, see `DESIGN.md`).
 | hyperfine | global (brew; mise ships an x86_64 build that will not run on arm64) | `scripts/bench.sh`: build timings | https://github.com/sharkdp/hyperfine |
 | sccache | global (mise) | `scripts/bench.sh`: the variant the tool is compared against | https://github.com/mozilla/sccache |
 | swift | global (Xcode), optional | `tests/swiftpm.rs`: the lock and rebuild oracles for SwiftPM, skipped without it; `docs/bench.md` numbers | https://github.com/swiftlang/swift |
+| xcodebuild, plutil | global (Xcode, macOS), optional | `tests/xcode.rs`: a real DerivedData entry and the no-op oracle, skipped without it; `plutil` reads a binary `info.plist`; `docs/bench.md` numbers | https://developer.apple.com/xcode/ |
 | dotnet | global (installer), optional, a 9.0 SDK | `tests/dotnet.rs`: the MSBuild no-op oracle, skipped without it | https://github.com/dotnet/sdk |
 | cmake | global (mise), optional, with the system `cc` | `tests/cmake.rs`: the Makefiles and Ninja no-op oracles, skipped without it; `docs/bench.md` numbers | https://github.com/Kitware/CMake |
 | ninja | global (mise), optional | `tests/cmake.rs`, `tests/meson.rs`: `ninja -n` plans nothing after a run, skipped without it | https://github.com/ninja-build/ninja |

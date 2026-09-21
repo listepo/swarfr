@@ -97,6 +97,18 @@ busy, clones only. A build dir configured in the source tree itself (`cmake .`) 
 Meson build dirs (`meson-private/coredata.dat` with `meson-info/`) get the same, with `meson`,
 `ninja` and `samu` as the processes looked for.
 
+Xcode's DerivedData is found only when named as a root:
+
+```sh
+dunnage run ~/Library/Developer/Xcode/DerivedData
+```
+
+Each entry (`<Name>-<hash>/`, with `info.plist` naming the workspace it was built from) is one
+unit in the same tier: files older than a day only, clones only, and busy while `xcodebuild`,
+Xcode or one of its build services works there or holds a file in it open. Xcode keeps a build
+service alive while it runs, so quit Xcode, or run the tool when it is not building. An entry
+whose project is gone is `project gone` in `status`, and `orphans` may remove it.
+
 ## Commands
 
 ### `dunnage status [--json] [--all] [--cargo-home [DIR]] [ROOT]...`
@@ -303,7 +315,7 @@ lock-budget-secs = 2     # how long a group may hold a build's locks
 The family key is the git common dir that `status` prints for the family. A `skip-paths` entry
 is a prefix of the build dir's position in its checkout, compared by whole components; a
 skipped build dir is neither worked on nor counted by any pass. `ecosystems` takes the adapter
-names `status` prints: `cargo`, `swiftpm`, `dotnet`, `cmake`, `meson`.
+names `status` prints: `cargo`, `swiftpm`, `dotnet`, `cmake`, `meson`, `xcode`.
 `[index] idle-days` is how long the hash index keeps a file's hash that no run has looked up
 (default 30); forgetting one costs a single rehash.
 

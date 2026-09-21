@@ -8,7 +8,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use super::Caps;
+use super::{Caps, Held};
 use applesauce::FileCompressor;
 use applesauce::compressor::Kind;
 use applesauce::progress::{Progress, SkipReason, Task};
@@ -176,9 +176,9 @@ impl Task for FileNotes {
     }
 }
 
-/// The current dirs of the running processes called one of `tools`: `ps` for the names, `lsof`
-/// for the dirs. `None` when either cannot run.
-pub fn tool_cwds(tools: &[&str]) -> Option<Vec<PathBuf>> {
+/// The current dirs and open files of the running processes called one of `tools`: `ps` for the
+/// names, `lsof` for the paths. `None` when either cannot run.
+pub fn tool_paths(tools: &[&str]) -> Option<Vec<Held>> {
     let ps = std::process::Command::new("/bin/ps")
         .args(["-axo", "pid=,comm="])
         .output()
@@ -201,22 +201,35 @@ pub fn tool_cwds(tools: &[&str]) -> Option<Vec<PathBuf>> {
     if pids.is_empty() {
         return Some(Vec::new());
     }
-    // `-a`: both conditions; `-Fn`: one `n<path>` line per current dir.
+    // `-Ffn`: an `f<descriptor>` line, then an `n<path>` line, per open file.
     let lsof = std::process::Command::new("/usr/sbin/lsof")
-        .args(["-a", "-d", "cwd", "-Fn", "-p", &pids.join(",")])
+        .args(["-Ffn", "-p", &pids.join(",")])
         .output()
         .ok()?;
     // lsof fails when one of the processes is gone or not ours, and still lists the rest.
     if !lsof.status.success() && lsof.stdout.is_empty() {
         return None;
     }
-    Some(
-        String::from_utf8_lossy(&lsof.stdout)
-            .lines()
-            .filter_map(|line| line.strip_prefix('n'))
-            .map(PathBuf::from)
-            .collect(),
-    )
+    Some(held(&String::from_utf8_lossy(&lsof.stdout)))
+}
+
+/// `lsof -Ffn` output as paths held. The root dir (`rtd`) says nothing; anything else that is
+/// not the current dir is a file the process has open or mapped (`txt`).
+fn held(lsof: &str) -> Vec<Held> {
+    let mut descriptor = "";
+    let mut held = Vec::new();
+    for line in lsof.lines() {
+        if let Some(fd) = line.strip_prefix('f') {
+            descriptor = fd;
+        } else if let Some(path) = line.strip_prefix('n') {
+            match descriptor {
+                "cwd" => held.push(Held::Cwd(PathBuf::from(path))),
+                "rtd" => {}
+                _ => held.push(Held::Open(PathBuf::from(path))),
+            }
+        }
+    }
+    held
 }
 
 /// `DARWIN_USER_TEMP_DIR`: the per-user temp dir, as `getconf` reads it from `confstr`.
@@ -228,4 +241,22 @@ pub fn user_temp_dir() -> Option<PathBuf> {
     let dir = String::from_utf8(out.stdout).ok()?;
     let dir = dir.trim();
     (out.status.success() && !dir.is_empty()).then(|| PathBuf::from(dir))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lsof_lines_become_the_current_dir_and_open_files() {
+        let lsof = "p1\nfcwd\nn/work\nfrtd\nn/\nftxt\nn/dd/cache.v1\nf13u\nn/dd/build.db\n";
+        assert_eq!(
+            held(lsof),
+            [
+                Held::Cwd(PathBuf::from("/work")),
+                Held::Open(PathBuf::from("/dd/cache.v1")),
+                Held::Open(PathBuf::from("/dd/build.db")),
+            ]
+        );
+    }
 }

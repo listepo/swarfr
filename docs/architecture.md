@@ -108,7 +108,7 @@ How the adapters of `docs/ecosystems.md` answer:
 | cargo target | `CACHEDIR.TAG` with cargo's sentence | profile dir | `Lock(.cargo-lock)` | `LinkOptIn` | yes |
 | cargo home | `--cargo-home` | `registry/src`, `git/checkouts` | `Shared(.package-cache)` | `LinkSafe` | — |
 | SwiftPM | `.build/` next to `Package.swift` | `.build/` | `Lock` (spike) | `ClonesOnly` | no |
-| Xcode | `info.plist` with `WorkspacePath`, via `well_known` | the DerivedData entry | `Quiet` | `ClonesOnly` | no |
+| Xcode | `info.plist` with `WorkspacePath` next to `Build/` or `Logs/`, under a root the user names | the DerivedData entry | `Quiet`, open files count | `ClonesOnly` | no |
 | .NET | `obj/project.assets.json` | `obj/`, `bin/` | `Quiet` | `ClonesOnly`, link refused | no |
 | CMake / Meson / Ninja | `CMakeCache.txt`, `meson-private/coredata.dat` + `meson-info/`, `.ninja_log` (not yet) | the build dir | `Quiet` | `ClonesOnly` | no |
 | immutable store, Go | named by the user, `go env` | the store | `Immutable` | — | — |

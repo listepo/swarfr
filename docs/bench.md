@@ -233,6 +233,23 @@ run, and the `math` example still adds. The largest share is `SDKExplicitPrecomp
 `ModuleCache.noindex`, per package copies of SDK modules: more packages on one machine would
 give dedupe more to share, not measured yet.
 
+## An Xcode DerivedData entry
+
+swift-argument-parser (shallow clone of `main`, `cdc5f0c`), Xcode 27 on macOS 27, APFS:
+`xcodebuild -scheme swift-argument-parser-Package -derivedDataPath dd build`, in Debug and in
+Release, every file of `dd` then moved back two days past the quiet tier's floor, builds repeated
+until they settled, and `dunnage run dd` from a release build.
+
+| | before | after | delta |
+| --- | --- | --- | --- |
+| `du` of `dd` | 319.9 MiB | 221.5 MiB | **−98 MiB (−30.7%)** |
+| compress | | 1521 files | |
+| dedupe | | 24 files, 0.1 MiB | |
+
+Oracle: `xcodebuild` in Debug, built last, afterwards prints no compile or link step, and `math`
+from both configurations still adds and multiplies. Less than SwiftPM's share: 240 files,
+127 MiB on disk, were rewritten while the builds settled and stayed under the one-day floor.
+
 ## A CMake project
 
 fmt (shallow clone of `master`, `6d71f74`), AppleClang on macOS 27, APFS: configured with

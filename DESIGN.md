@@ -161,8 +161,11 @@ table, `quiet` per group in `--json`):
 1. **Process check.** `Ecosystem::tools` names the build tool's processes. A unit is busy —
    skipped, exit code 2 — when one of them has its current dir in the unit, below it, or in a
    dir around it (`make` in the project root builds into `build/`); a process in a filesystem
-   root counts for nothing. macOS reads `ps` and `lsof`, Linux `/proc`. Where the check cannot
-   run — Windows, or an adapter that names no tool — the unit is *unsure*.
+   root counts for nothing. On macOS a file inside the unit that one of them holds open or mapped
+   makes it busy too (`sys::Held::Open`): Xcode's build service works from a dir inside Xcode.app
+   and holds the build database open. macOS reads `ps` and `lsof`, Linux `/proc` (current dirs
+   only). Where the check cannot run — Windows, or an adapter that names no tool — the unit is
+   *unsure*.
 2. **Age floor.** Files younger than `engine::QUIET_MIN_AGE` (one day) are left out of the model,
    whatever a pass's own `min-age` says. A unit that had any is unsure.
 3. **Busy files.** A file found in use while it is replaced — `ETXTBSY`, `EBUSY`, a Windows
@@ -815,6 +818,32 @@ alongside it. So a CMake+Ninja dir stays under the quiet tier with the rest.
 `tests/meson.rs`: the claim and the owner from fixtures, what is refused, and, where `meson` and
 `ninja` are installed, a real project after compress and dedupe: `ninja -n` reports no work,
 the binaries run, and a touched source is planned again.
+
+## Xcode (`src/eco/xcode.rs`)
+
+- **Claim.** A dir holding `info.plist` with a `WorkspacePath` and a `Build/` or `Logs/` dir:
+  a DerivedData entry, wherever `-derivedDataPath` put it. The whole entry is one unit. The
+  plist Xcode 27 writes is XML; a binary one is converted by `/usr/bin/plutil`. An entry whose
+  workspace lies inside it is not claimed.
+- **Owner.** `WorkspacePath` as written, which is the path `xcodebuild` was given, symlinks and
+  all. The manifest is the `.xcodeproj`, `.xcworkspace` or `.playground` bundle itself, or a
+  package's `Package.swift`.
+- **Not found by default.** DerivedData lives under `~/Library`; the library reads no home dir,
+  so it is a root the user names.
+- **No lock.** `xcodebuild` starts `SWBBuildService`, whose current dir is inside Xcode.app and
+  which holds `build.db` and the compilation cache open, some of it mapped; it exits with
+  `xcodebuild`, while the Xcode app keeps one for as long as it runs. `Guard::Quiet`, with
+  `xcodebuild`, `SWBBuildService`, `XCBBuildService` and `Xcode` as the tools, and a file held
+  open inside the unit counts (see the no-lock tier).
+- **Clones only, no seed.** Objects may be rewritten in place, and the entry name is a hash of
+  the workspace path.
+
+The build database records each output's mtime: moving every file of an entry back relinks, and
+switching between Debug and Release recompiles a few files, both with or without the tool. The
+oracle is a second build of the configuration built last, which prints no `SwiftCompile`,
+`SwiftEmitModule`, `CompileC` or `Ld` step. `tests/xcode.rs`: the claim and the owner from
+fixtures, what is refused, an open file making the entry busy, and, where `xcodebuild` is
+installed, a package built into a temp `-derivedDataPath` after compress and dedupe.
 
 ## Known build dirs (`src/known.rs`)
 

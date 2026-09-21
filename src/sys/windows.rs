@@ -63,7 +63,7 @@ pub fn flags(_path: &Path, meta: &Metadata) -> u32 {
 /// answer either way.
 /// Not told here: finding a process's current dir takes reading its memory. Every quiet unit
 /// stays unsure.
-pub fn tool_cwds(_tools: &[&str]) -> Option<Vec<PathBuf>> {
+pub fn tool_paths(_tools: &[&str]) -> Option<Vec<super::Held>> {
     None
 }
 

@@ -125,14 +125,16 @@ The most promising target after cargo, because the tool was built for macOS and 
 
 - **Discover / owner.** Each `~/Library/Developer/Xcode/DerivedData/<Name>-<hash>/` holds an
   `info.plist` with `WorkspacePath` — the source it belongs to — and a last-accessed date
-  (*unverified* for current Xcode). That makes `orphans` and `evict` direct. SwiftPM's `.build/`
+  (checked for Xcode 27 in T30.1: XML, next to `Build/` and `Logs/`). That makes `orphans` and `evict` direct. SwiftPM's `.build/`
   sits in the package, like `target/`.
 - **Lock.** SwiftPM refuses a second instance on the same `.build/`, so it holds a lock an
-  outsider can test (*unverified* which file and which call). Xcode's build system: unknown.
+  outsider can test (*unverified* which file and which call). Xcode's build system takes none;
+  its build service holds the build database open instead (T30.1).
 - **Size.** DerivedData is routinely tens of GB, and the usual advice is to delete it whole.
   Nothing lossless exists for it.
 - **Compress:** yes. **Dedupe:** unmeasured — `ModuleCache.noindex` and per-project copies of the
   same package builds look promising. **Seed:** no, the dir name is a hash of the workspace path.
+- Done: SwiftPM (T30) and DerivedData (T30.1), 320 MiB to 222 MiB on swift-argument-parser.
 
 ### Content-addressed stores
 

@@ -11,6 +11,7 @@ pub mod go;
 pub mod meson;
 pub mod store;
 pub mod swiftpm;
+pub mod xcode;
 
 use std::ffi::OsStr;
 use std::io;
@@ -161,12 +162,13 @@ impl Sharing {
 }
 
 /// Every adapter, in the order the shared walk asks them.
-pub static REGISTRY: [&dyn Ecosystem; 5] = [
+pub static REGISTRY: [&dyn Ecosystem; 6] = [
     &cargo::CARGO,
     &swiftpm::SWIFTPM,
     &dotnet::DOTNET,
     &cmake::CMAKE,
     &meson::MESON,
+    &xcode::XCODE,
 ];
 
 /// The registered adapter called `name`.

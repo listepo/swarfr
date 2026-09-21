@@ -54,20 +54,30 @@ pub fn caps(dir: &Path) -> Caps {
     imp::caps(dir)
 }
 
+/// A path a running build tool holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Held {
+    /// Its current dir.
+    Cwd(std::path::PathBuf),
+    /// A file it has open or mapped. Only macOS reports these: the Xcode build service works in
+    /// DerivedData from a current dir inside Xcode.app.
+    Open(std::path::PathBuf),
+}
+
 /// Whether a process called one of `tools` works in `dir`: its current dir is `dir`, below it,
-/// or a dir around it — `make` run from the project root builds into `build/`. A process in a
-/// filesystem root says nothing about any dir. `None` when it cannot be told: no tools named, no
-/// process table here, or the platform does not say. Only processes whose current dir this user
-/// may read are seen.
+/// or a dir around it — `make` run from the project root builds into `build/` — or it holds a
+/// file inside `dir` open. A process in a filesystem root says nothing about any dir. `None`
+/// when it cannot be told: no tools named, no process table here, or the platform does not say.
+/// Only processes this user may inspect are seen.
 pub fn tool_running(dir: &Path, tools: &[&str]) -> Option<bool> {
     if tools.is_empty() {
         return None;
     }
-    let cwds = imp::tool_cwds(tools)?;
-    Some(
-        cwds.iter()
-            .any(|cwd| cwd.starts_with(dir) || (cwd.parent().is_some() && dir.starts_with(cwd))),
-    )
+    let held = imp::tool_paths(tools)?;
+    Some(held.iter().any(|held| match held {
+        Held::Cwd(cwd) => cwd.starts_with(dir) || (cwd.parent().is_some() && dir.starts_with(cwd)),
+        Held::Open(file) => file.starts_with(dir),
+    }))
 }
 
 /// The temp dir build tools put their lock files in: `TMPDIR`, else, on macOS, the per-user one
