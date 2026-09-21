@@ -222,6 +222,14 @@ and I/O priority, and starts it; `--config` and `--index` are passed on to `daem
 `--print` only shows the unit. `remove` stops the daemon and deletes the unit. `status [--index
 FILE] [--json]` says whether the unit is installed and prints the state file.
 
+## Progress
+
+`run`, `status`, `advise` and `seed` draw a spinner on stderr while they work; `run` turns it
+into a bar over the groups once it knows how many there are. It is drawn only when stderr is a
+terminal and never with `--json`, and it is cleared before each line of output, so stdout is the
+same whether it shows or not. `worktree add` draws none: git prints there. The daemon logs lines
+only.
+
 ## Exit codes
 
 | Code | Meaning |

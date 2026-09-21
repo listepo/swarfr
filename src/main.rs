@@ -1,5 +1,6 @@
 use std::cell::Cell;
 use std::collections::BTreeMap;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
@@ -12,6 +13,7 @@ use dunnage::engine;
 use dunnage::inventory::{Inventory, Target};
 use dunnage::session::{self, Control, Observer, Request, RunReport, Session, Settings};
 use dunnage::tmpdir;
+use indicatif::{ProgressBar, ProgressStyle};
 
 mod daemon;
 
@@ -391,7 +393,10 @@ fn status(json: bool, all: bool, home: Option<PathBuf>, roots: Vec<PathBuf>) -> 
     let roots = roots_or_config(roots)?;
     // Read-only and stateless: no index, so a missing `$HOME` is no reason to stop.
     let session = Session::open(Settings::default());
-    let inventory = session.inventory(&roots, home_flag(home).as_deref())?;
+    let spinner = spinner(!json, "reading the build dirs");
+    let inventory = session.inventory(&roots, home_flag(home).as_deref());
+    spinner.finish_and_clear();
+    let inventory = inventory?;
     if json {
         println!("{}", serde_json::to_string_pretty(&inventory)?);
         return Ok(());
@@ -512,7 +517,10 @@ fn print_target(target: &Target, now: u64) {
 fn advise(json: bool, roots: Vec<PathBuf>) -> Result<()> {
     let roots = roots_or_config(roots)?;
     let session = Session::open(Settings::default());
-    let advice = session.advise(&roots, cargo_home::path(None).as_deref())?;
+    let spinner = spinner(!json, "reading manifests and configs");
+    let advice = session.advise(&roots, cargo_home::path(None).as_deref());
+    spinner.finish_and_clear();
+    let advice = advice?;
     for warning in &advice.warnings {
         eprintln!("warning: {warning}");
     }
@@ -551,8 +559,10 @@ fn seed_into(
 ) -> Result<Done> {
     let checkout = dir.unwrap_or_else(|| PathBuf::from("."));
     let session = open(index, &load_config(None)?)?;
-    let done = session.seed(&checkout, from.as_deref(), dry_run)?;
-    print_seedings(&done, dry_run)
+    let spinner = spinner(true, "seeding");
+    let done = session.seed(&checkout, from.as_deref(), dry_run);
+    spinner.finish_and_clear();
+    print_seedings(&done?, dry_run)
 }
 
 /// `dunnage worktree add`: the session adds and seeds; this says what came of each.
@@ -688,15 +698,21 @@ fn run(args: RunArgs) -> Result<Done> {
         dry_run,
     };
     let quiet = session::Quiet;
+    let progress = Progress {
+        bar: spinner(!json, "starting"),
+        table: if json { &quiet } else { &table },
+    };
     let control = Control {
-        observer: if json { &quiet } else { &table },
+        observer: &progress,
         ..Control::default()
     };
     let report = if dry_run {
-        session.plan(&request, &control)?
+        session.plan(&request, &control)
     } else {
-        session.apply(&request, &control)?
+        session.apply(&request, &control)
     };
+    progress.bar.finish_and_clear();
+    let report = report?;
     if json {
         println!(
             "{}",
@@ -715,6 +731,54 @@ fn run(args: RunArgs) -> Result<Done> {
         }
     }
     Ok(Done::busy_if(report.left_busy))
+}
+
+/// A spinner on stderr while `what` goes on: hidden unless `show` and stderr is a terminal, so a
+/// pipe, a script and `--json` see nothing of it. Cleared before anything is printed.
+fn spinner(show: bool, what: &'static str) -> ProgressBar {
+    if !show || !std::io::stderr().is_terminal() {
+        return ProgressBar::hidden();
+    }
+    let bar = ProgressBar::new_spinner()
+        .with_style(
+            ProgressStyle::with_template("{spinner} {elapsed} {wide_msg}")
+                .expect("a valid template"),
+        )
+        .with_message(what);
+    bar.enable_steady_tick(Duration::from_millis(100));
+    bar
+}
+
+/// The spinner, then a bar over the groups, around the table: every table line is printed with
+/// the bar lifted, so the two never share a line.
+struct Progress<'a> {
+    bar: ProgressBar,
+    table: &'a dyn Observer,
+}
+
+impl Observer for Progress<'_> {
+    fn step(&self, what: &str) {
+        self.bar.set_message(what.to_owned());
+    }
+
+    fn groups(&self, total: usize) {
+        self.bar.set_length(total as u64);
+        self.bar.set_style(
+            ProgressStyle::with_template("{spinner} {elapsed} [{bar:30}] {pos}/{len} {wide_msg}")
+                .expect("a valid template")
+                .progress_chars("=> "),
+        );
+    }
+
+    fn group(&self, group: &Path) {
+        self.bar.set_message(group.display().to_string());
+        self.bar.suspend(|| self.table.group(group));
+    }
+
+    fn report(&self, group: &Path, report: &engine::Report) {
+        self.bar.suspend(|| self.table.report(group, report));
+        self.bar.inc(1);
+    }
 }
 
 /// The table a run prints as it goes.

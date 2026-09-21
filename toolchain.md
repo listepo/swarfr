@@ -32,6 +32,7 @@ too slow, see `DESIGN.md`).
 | clap | local, `cli` feature | https://github.com/clap-rs/clap | CLI parsing |
 | rustix | local, Linux only (`[target.'cfg(target_os = "linux")'.dependencies]`) | https://github.com/bytecodealliance/rustix | `FICLONE` and `FS_IOC_GET/SETFLAGS` without hand-written `unsafe` |
 | walkdir | local | https://github.com/BurntSushi/walkdir | Walk a profile dir without following symlinks or leaving the device |
+| indicatif | local, `cli` feature | https://github.com/console-rs/indicatif | The spinner and progress bar on stderr |
 | anyhow | local, `cli` feature | https://github.com/dtolnay/anyhow | Error context in the binary |
 | sha2 | local | https://github.com/RustCrypto/hashes | Content hash for dedupe |
 | applesauce | local, macOS only (`[target.'cfg(target_os = "macos")'.dependencies]`) | https://github.com/Dr-Emann/applesauce | Backend of the compress pass: transparent APFS compression |

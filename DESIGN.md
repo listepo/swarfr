@@ -299,8 +299,10 @@ a `Request`, prints what the session returns and picks the exit code.
   plus the cargo home under its own lock. The index is saved before the lock is released.
   `seed` takes the same lock. A second session gets `Error::RunLockHeld` and the CLI exits 2:
   a manual run and the daemon coordinate through that file, without IPC.
-- `Control` steers a run from outside: an `Observer` hears each group before and after (the CLI
-  prints its table from there), `stop` ends the run between two actions, and `lock_budget`
+- `Control` steers a run from outside: an `Observer` hears each stage that is not a group (the
+  walk of the roots, reading the build dirs, the temp dir), the number of groups to come, and
+  each group before and after (the CLI prints its table from there, and draws its progress bar
+  on stderr), `stop` ends the run between two actions, and `lock_budget`
   bounds how long a group's build locks are held — a group out of budget lets go, so a build
   waiting on its lock gets it, and is visited once more after the other groups; what is still
   left then counts as busy. The CLI sets neither.

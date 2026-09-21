@@ -298,6 +298,11 @@ fn ensure(ok: bool, message: impl FnOnce() -> String) -> Result<()> {
 
 /// What a front end hears while a run goes on. Every method has a default that does nothing.
 pub trait Observer {
+    /// A stage of the run starts that is not a group: the walk of the roots, reading the build
+    /// dirs found, the temp dir.
+    fn step(&self, _what: &str) {}
+    /// How many groups the run is about to visit; a group let go early is visited once more.
+    fn groups(&self, _total: usize) {}
     /// A group of targets is about to be worked on: a family, [`ACROSS_FAMILIES`], or a cargo
     /// home.
     fn group(&self, _group: &Path) {}
@@ -638,6 +643,7 @@ impl Session {
                 .iter()
                 .map(|root| canonical(root))
                 .collect::<Result<Vec<_>>>()?;
+            control.observer.step("walking the roots");
             let (found, walked) = known::discover(
                 self.settings.known_dirs().as_deref(),
                 &roots,
@@ -646,6 +652,7 @@ impl Session {
                 now_unix(),
             );
             report_walked = walked;
+            control.observer.step("reading the build dirs");
             inventory::inventory_of(found)?
         };
         ensure(!inventory.targets.is_empty() || only_home, || {
@@ -765,6 +772,12 @@ impl Session {
             walked: report_walked,
             ..RunReport::default()
         };
+        control.observer.groups(
+            groups.len()
+                + usize::from(request.cargo_home.is_some())
+                + stores.len()
+                + usize::from(go_modcache.is_some()),
+        );
         let mut again = Vec::new();
         for ((group, _), (eco, profile_dirs)) in &groups {
             if control.stopped() {
@@ -887,6 +900,7 @@ impl Session {
                 .and_then(|parent| parent.canonicalize().ok())
                 .into_iter()
                 .collect();
+            control.observer.step("the temp dir");
             let in_use = sys::paths_in_use(dir);
             let idle_days = request.tmpdir_idle_days.unwrap_or(u64::MAX);
             report.tmpdir = Some(

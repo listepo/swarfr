@@ -1953,3 +1953,47 @@ tests on fake temp dirs cover the age rule, an open file, and a young file deep 
   `com.apple.rootless`), whose removal failed with EPERM; such an entry is now kept as protected.
 - Against the real `$TMPDIR` the agent ran a dry run only; the removal was the creator's. `~/.cache/dunnage` is absent, no `_.build.lock` is left.
 
+### T44. A spinner or progress bar while a command runs
+
+Asked by the creator: a CLI command that takes a while (`run`, `status`, `advise`, `seed`) shows
+it is alive — a spinner while the roots are walked, then progress through the groups and the
+passes — instead of a silent terminal until the table prints.
+
+Done when: the indicator goes to stderr only, is drawn only when stderr is a terminal, never with
+`--json`, and never from the daemon; stdout (the table, the JSON) is byte for byte what it was;
+the indicator is cleared before each line of the table, so the two never interleave.
+
+#### Execution plan
+
+1. The crate: `indicatif`, listed in `rust.md` and approved by the creator for this project.
+2. `session::Observer` grows default no-op hooks the engine calls as work starts: the walk of
+   the roots, each group with its index and total, each pass in a group. The daemon's `Log` and
+   `Quiet` keep the defaults.
+3. `src/main.rs`: a `Progress` wrapper around `Table` that owns the bar, drawn when
+   `std::io::stderr().is_terminal()` and not `--json`; each table line is printed through
+   `suspend`, so the bar never cuts a line.
+4. Verify: `just check`, `just check-cross`; the CLI on a fixture target in a temp dir, through
+   a pty (`script`) to see the bar, and piped to see that stdout is unchanged.
+
+#### Result
+
+- `session::Observer` gained `step` (the walk of the roots, reading the build dirs, the temp
+  dir) and `groups` (how many groups a run will visit), both no-ops by default; the daemon's log
+  and `Quiet` keep the defaults.
+- `src/main.rs`: `spinner()` draws an `indicatif` spinner on stderr, hidden unless stderr is a
+  terminal and the output is not `--json`; `Progress` wraps the run's table, turns the spinner
+  into a bar over the groups, and prints each table line through `suspend`. `status`, `advise`
+  and `seed` show the spinner while they read; `worktree add` shows none, because git prints
+  there. Messages are cut to the terminal width (`{wide_msg}`).
+- `indicatif` 0.18.6 under the `cli` feature, so the library stays without it.
+- Docs: `docs/usage.md` "Progress", `DESIGN.md` on `Control`, `toolchain.md`. `rust.md` already
+  listed the crate.
+
+#### Verified
+
+- `just check` (220 tests) and `just check-cross` pass.
+- The CLI on two fixture cargo projects and a fake `TMPDIR` in the scratchpad, with an isolated
+  `HOME`: through a pty (`script`, `TERM` set) the spinner walks through its stages, becomes
+  `[ ] 0/2` with the group cut to 80 columns, and is cleared before each table line; piped,
+  stdout carries the table only and stderr is empty; `--json` in a pty draws nothing. With
+  `TERM` unset the console crate sees no terminal and draws nothing either.
