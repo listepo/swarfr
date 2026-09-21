@@ -69,11 +69,13 @@ projects: it must report nothing to recompile.
 | `evict` | **deletes** | profile dirs idle for N days, or the least recently built above a size cap | `--lossy evict` + a threshold |
 | `incremental` | **deletes** | `incremental/` of profile dirs idle for N days | `--lossy incremental --incremental-idle-days N` |
 | `doc` | **deletes** | `<target>/doc` | `--lossy doc` |
+| `tmpdir` | **deletes** | top-level entries of the per-user temp dir with nothing modified for N days and nothing held by a process | `--lossy tmpdir --tmpdir-idle-days N` |
 
 Lossless passes never change a file's content or modification time, which is all cargo looks at,
 so nothing is rebuilt. A lossy pass removes only what cargo can build again, only when you name
-it, and prints every removal with its reason — on `--dry-run` too. Only `target/` contents are
-ever removed; sources are never touched.
+it, and prints every removal with its reason — on `--dry-run` too. Only build dirs are ever
+removed, and sources are never touched — except by `tmpdir`, which works on the temp dir and
+nothing else.
 
 Every pass takes cargo's own build lock. A profile dir with a build running is skipped and
 reported, and the exit code says so.
@@ -141,6 +143,7 @@ config file.
 | `--evict-max-total-gib <GIB>` | with `--lossy evict`: then the least recently built, until everything fits |
 | `--evict-whole-target` | with `--lossy evict`: remove the target dir itself once all its profiles went |
 | `--incremental-idle-days <DAYS>` | with `--lossy incremental` |
+| `--tmpdir-idle-days <DAYS>` | with `--lossy tmpdir`: temp dir entries with nothing modified for this long |
 | `--min-age <SECS>` | leave younger files alone; default 3600 |
 | `--min-size <BYTES>` | leave smaller files alone; default 8192 for compress, 4096 for dedupe |
 | `--cargo-home [DIR]` | also compress the cargo home's unpacked sources, under cargo's `.package-cache` lock |
@@ -205,6 +208,9 @@ lock, and so is the daemon's look while a manual run goes on: it tries again at 
 The daemon handles no signal: killed mid-run it leaves at most `.dunnage-tmp-*` files, which the
 next run removes.
 
+With `tmpdir` in the config's `lossy`, the daemon cleans the temp dir once a day on its own,
+not on every run the build dirs start: a walk of the temp dir is not free.
+
 State: `daemon.json` next to the hash index — the units, their last build, due and visited
 times, the last run's per-pass counts and busy units. A restarted daemon starts from it.
 
@@ -254,6 +260,13 @@ Keep all targets under a budget:
 dunnage run --lossy evict --evict-idle-days 30 --evict-max-total-gib 50 ~/code
 ```
 
+What other programs left in the temp dir for a week, listed first:
+
+```
+dunnage run --dry-run --lossy tmpdir --tmpdir-idle-days 7
+dunnage run --lossy tmpdir --tmpdir-idle-days 7
+```
+
 The registry sources as well (no target dirs needed):
 
 ```
@@ -289,6 +302,9 @@ whole-target = true
 
 [incremental]
 idle-days = 7
+
+[tmpdir]
+idle-days = 7  # with lossy = ["tmpdir"]
 
 [index]
 idle-days = 30

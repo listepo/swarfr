@@ -19,8 +19,8 @@
 mod imp;
 
 pub use imp::{
-    ALLOCATED_SHOWS_COMPRESSION, COMPRESSED, Compressor, allocated, clone_file, file_id, flags,
-    mode, nlink, set_mode, symlink,
+    ALLOCATED_SHOWS_COMPRESSION, COMPRESSED, Compressor, PROTECTED, allocated, clone_file, file_id,
+    flags, mode, nlink, set_mode, symlink,
 };
 
 use std::path::Path;
@@ -78,6 +78,13 @@ pub fn tool_running(dir: &Path, tools: &[&str]) -> Option<bool> {
         Held::Cwd(cwd) => cwd.starts_with(dir) || (cwd.parent().is_some() && dir.starts_with(cwd)),
         Held::Open(file) => file.starts_with(dir),
     }))
+}
+
+/// Every path a process of `dir`'s owner holds: current dirs, open files, mapped files. `None`
+/// when it cannot be told — no process table here, or the platform does not say — and then
+/// nothing may be taken as unused. Paths are as the kernel reports them: real paths.
+pub fn paths_in_use(dir: &Path) -> Option<Vec<std::path::PathBuf>> {
+    imp::user_paths(dir)
 }
 
 /// The temp dir build tools put their lock files in: `TMPDIR`, else, on macOS, the per-user one

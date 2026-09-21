@@ -15,6 +15,10 @@ use applesauce::progress::{Progress, SkipReason, Task};
 
 /// `UF_COMPRESSED` from `<sys/stat.h>`: the file is transparently compressed.
 pub const COMPRESSED: u32 = 0x20;
+/// Flags under which a file or dir cannot be removed: `UF_IMMUTABLE`, `UF_APPEND`,
+/// `SF_IMMUTABLE`, `SF_APPEND`, `SF_RESTRICTED` (System Integrity Protection) and `SF_NOUNLINK`,
+/// which macOS sets on the per-service dirs it keeps in the user's temp dir.
+pub const PROTECTED: u32 = 0x2 | 0x4 | 0x2_0000 | 0x4_0000 | 0x8_0000 | 0x10_0000;
 
 /// APFS charges the compressed size in `st_blocks`, so every figure the reports print — `du`'s
 /// number, the engine's `freed_bytes` — shows the compression win by itself.
@@ -230,6 +234,27 @@ fn held(lsof: &str) -> Vec<Held> {
         }
     }
     held
+}
+
+/// What every process of `dir`'s owner holds, from `lsof -u`: a few hundred milliseconds, where
+/// every process on the machine takes seconds.
+pub fn user_paths(dir: &Path) -> Option<Vec<PathBuf>> {
+    let uid = fs::metadata(dir).ok()?.uid();
+    let lsof = std::process::Command::new("/usr/sbin/lsof")
+        .args(["-Ffn", "-u", &uid.to_string()])
+        .output()
+        .ok()?;
+    if !lsof.status.success() && lsof.stdout.is_empty() {
+        return None;
+    }
+    Some(
+        held(&String::from_utf8_lossy(&lsof.stdout))
+            .into_iter()
+            .map(|held| match held {
+                Held::Cwd(path) | Held::Open(path) => path,
+            })
+            .collect(),
+    )
 }
 
 /// `DARWIN_USER_TEMP_DIR`: the per-user temp dir, as `getconf` reads it from `confstr`.

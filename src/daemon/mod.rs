@@ -16,6 +16,7 @@ use dunnage::compress;
 use dunnage::eco::{self, Guard};
 use dunnage::engine::{self, QUIET_MIN_AGE};
 use dunnage::session::{self, Control, Observer, Request, RunReport, Session, Settings};
+use dunnage::{sys, tmpdir};
 use serde::{Deserialize, Serialize};
 
 /// Next to the hash index, like the run lock.
@@ -24,6 +25,8 @@ const DEFAULT_INTERVAL: Duration = Duration::from_secs(10 * 60);
 const DEFAULT_REDISCOVER: Duration = Duration::from_secs(6 * 60 * 60);
 /// Low: a build that finds a group holding its lock waits this long, and one action more.
 const DEFAULT_LOCK_BUDGET: Duration = Duration::from_secs(2);
+/// How often `tmpdir`, when the config enables it, cleans the temp dir.
+const TMPDIR_EVERY: u64 = 24 * 60 * 60;
 
 /// A unit the daemon knows, and where it stands.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,6 +64,19 @@ pub struct State {
     pub last_run: Option<LastRun>,
     /// Why the last run did not happen: another run held the run lock, or it failed.
     pub last_error: Option<String>,
+    /// The last time `tmpdir` cleaned the temp dir.
+    pub last_tmpdir: Option<TmpDirRun>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct TmpDirRun {
+    pub finished_unix: u64,
+    pub removed: usize,
+    pub freed_bytes: u64,
+    /// Old entries left, because a process held them or for another reason.
+    pub kept: usize,
+    /// Nobody could say which files processes hold, so nothing was removed.
+    pub unsure: bool,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -79,6 +95,25 @@ pub struct PassSummary {
     pub name: String,
     pub applied: usize,
     pub freed_bytes: u64,
+}
+
+impl TmpDirRun {
+    fn new(report: &tmpdir::Report) -> Self {
+        eprintln!(
+            "{}: removed {} entries, {} freed, {} old kept",
+            report.dir.display(),
+            report.removed.len(),
+            crate::gib(report.freed_bytes()),
+            report.kept.len()
+        );
+        Self {
+            finished_unix: session::now_unix(),
+            removed: report.removed.len(),
+            freed_bytes: report.freed_bytes(),
+            kept: report.kept.len(),
+            unsure: report.unsure,
+        }
+    }
 }
 
 impl LastRun {
@@ -239,7 +274,22 @@ pub fn run(config: Option<&Path>, index: Option<PathBuf>, once: bool) -> Result<
     let config = crate::load_config(config)?;
     let mut request = Request::from_config(&config);
     request.until_settled = true;
+    request.tmpdir = Some(sys::temp_dir());
     request.check()?;
+    // The temp dir on its own, once a day: every run the build dirs start would walk it again.
+    let tmpdir_request = request
+        .lossy
+        .iter()
+        .any(|name| name == tmpdir::NAME)
+        .then(|| Request {
+            lossy: vec![tmpdir::NAME.into()],
+            passes: vec![tmpdir::NAME.into()],
+            tmpdir: request.tmpdir.clone(),
+            tmpdir_idle_days: request.tmpdir_idle_days,
+            ..Request::default()
+        });
+    request.lossy.retain(|name| name != tmpdir::NAME);
+    request.tmpdir_idle_days = None;
     ensure!(
         !request.roots.is_empty(),
         "the daemon works on `roots` from the config file, and it names none"
@@ -259,8 +309,26 @@ pub fn run(config: Option<&Path>, index: Option<PathBuf>, once: bool) -> Result<
     let mut state = load_state(&path);
     state.pid = std::process::id();
     let mut next_discovery = 0;
+    let mut next_tmpdir = state
+        .last_tmpdir
+        .as_ref()
+        .map_or(0, |run| run.finished_unix.saturating_add(TMPDIR_EVERY));
     loop {
         let now = session::now_unix();
+        if let Some(cleanup) = tmpdir_request.as_ref().filter(|_| now >= next_tmpdir) {
+            match session.apply(cleanup, &control) {
+                Ok(report) => {
+                    state.last_tmpdir = report.tmpdir.as_ref().map(TmpDirRun::new);
+                    state.last_error = None;
+                }
+                Err(error) => {
+                    eprintln!("error: {error:#}");
+                    state.last_error = Some(format!("{error:#}"));
+                }
+            }
+            // A failed cleanup is tried again tomorrow, not on every wake.
+            next_tmpdir = now.saturating_add(TMPDIR_EVERY);
+        }
         if now >= next_discovery {
             state.units = discover(&request.roots, &state.units);
             state.discovered_unix = now;
@@ -296,6 +364,9 @@ pub fn run(config: Option<&Path>, index: Option<PathBuf>, once: bool) -> Result<
         }
         let now = session::now_unix();
         state.next_wake_unix = next_wake(&state.units, now, interval, next_discovery);
+        if tmpdir_request.is_some() {
+            state.next_wake_unix = state.next_wake_unix.min(next_tmpdir.max(now));
+        }
         state.updated_unix = now;
         write_state(&path, &state)?;
         if once {
@@ -368,6 +439,22 @@ pub fn status(index: Option<PathBuf>, json: bool) -> Result<()> {
             }
         }
         None => println!("no run yet"),
+    }
+    if let Some(run) = &state.last_tmpdir {
+        if run.unsure {
+            println!(
+                "temp dir {} ago: open files unknown here, nothing removed",
+                ago(run.finished_unix)
+            );
+        } else {
+            println!(
+                "temp dir {} ago: removed {} entries, {} freed, {} old kept",
+                ago(run.finished_unix),
+                run.removed,
+                crate::gib(run.freed_bytes),
+                run.kept
+            );
+        }
     }
     if let Some(error) = &state.last_error {
         println!("last error: {error}");

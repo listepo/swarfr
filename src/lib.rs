@@ -15,5 +15,6 @@ pub mod orphans;
 pub mod seed;
 pub mod session;
 pub mod sys;
+pub mod tmpdir;
 
 pub use error::{Error, Result};

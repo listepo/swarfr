@@ -11,6 +11,7 @@ use dunnage::eco::cargo::home as cargo_home;
 use dunnage::engine;
 use dunnage::inventory::{Inventory, Target};
 use dunnage::session::{self, Control, Observer, Request, RunReport, Session, Settings};
+use dunnage::tmpdir;
 
 mod daemon;
 
@@ -69,7 +70,7 @@ enum Cmd {
     },
     /// Plan and apply the passes, one family of targets at a time; profile dirs with a running
     /// build are skipped
-    Run(RunArgs),
+    Run(Box<RunArgs>),
     /// Git worktrees that start warm
     #[command(subcommand)]
     Worktree(WorktreeCmd),
@@ -188,6 +189,10 @@ struct RunArgs {
     /// days. Without it they are only reported
     #[arg(long, value_name = "DAYS")]
     orphans_project_idle_days: Option<u64>,
+    /// With `--lossy tmpdir`: remove top-level entries of the temp dir with nothing inside
+    /// modified for this many days and no path in them held by a process
+    #[arg(long, value_name = "DAYS")]
+    tmpdir_idle_days: Option<u64>,
     /// Leave files younger than this alone, in seconds; both lossless passes [default: 3600]
     #[arg(long, value_name = "SECS")]
     min_age: Option<u64>,
@@ -243,7 +248,7 @@ fn main() -> ExitCode {
             roots,
         } => status(json, all, cargo_home, roots).map(|()| Done::Everything),
         Cmd::Advise { json, roots } => advise(json, roots).map(|()| Done::Everything),
-        Cmd::Run(args) => run(args),
+        Cmd::Run(args) => run(*args),
         Cmd::Daemon(cmd) => match cmd {
             DaemonCmd::Run {
                 config,
@@ -618,6 +623,10 @@ fn request(args: RunArgs, config: &Config) -> Request {
     if let Some(days) = args.orphans_project_idle_days {
         request.orphans_project_idle_days = Some(days);
     }
+    if let Some(days) = args.tmpdir_idle_days {
+        request.tmpdir_idle_days = Some(days);
+    }
+    request.tmpdir = Some(dunnage::sys::temp_dir());
     if let Some(secs) = args.min_age {
         request.min_age = Some(Duration::from_secs(secs));
     }
@@ -701,6 +710,9 @@ fn run(args: RunArgs) -> Result<Done> {
         if !report.walked && !report.groups.is_empty() {
             println!("build dirs from the last walk of the roots; --rediscover walks them again");
         }
+        if let Some(tmpdir) = &report.tmpdir {
+            print_tmpdir(tmpdir, dry_run);
+        }
     }
     Ok(Done::busy_if(report.left_busy))
 }
@@ -758,6 +770,47 @@ fn print_report(report: &engine::Report, dry_run: bool) {
     }
 }
 
+/// What `--lossy tmpdir` removed, or would, and what old entries it left and why.
+fn print_tmpdir(report: &tmpdir::Report, dry_run: bool) {
+    println!("{}", report.dir.display());
+    if report.unsure {
+        println!("  tmpdir: which files processes hold open cannot be told here; nothing removed");
+        return;
+    }
+    let now = session::now_unix();
+    let verb = if dry_run { "would remove" } else { "removed" };
+    println!(
+        "  tmpdir: {verb} {} entries, {}; {} old kept, {} modified within {} days",
+        report.removed.len(),
+        gib(report.freed_bytes()),
+        report.kept.len(),
+        report.young,
+        report.idle_days
+    );
+    for entry in &report.removed {
+        println!(
+            "    {verb} {}: {}, nothing modified for {} days",
+            entry.path.display(),
+            gib(entry.allocated_bytes),
+            now.saturating_sub(entry.newest_unix) / 86_400
+        );
+    }
+    for (path, why) in &report.kept {
+        let why = match why {
+            tmpdir::Kept::InUse => "a process holds a path in it",
+            tmpdir::Kept::Socket => "holds a socket",
+            tmpdir::Kept::OtherFilesystem => "reaches into another filesystem",
+            tmpdir::Kept::Protected => "protected by a flag, as macOS guards its own",
+            tmpdir::Kept::Unreadable => "unreadable, or dated in the future",
+            tmpdir::Kept::Kept => "holds the hash index",
+        };
+        println!("    kept {}: {why}", path.display());
+    }
+    for (path, error) in &report.failed {
+        println!("    failed {}: {error}", path.display());
+    }
+}
+
 /// `--json`: the same report as the table, for a script that has to act on it.
 #[derive(serde::Serialize)]
 struct JsonReport<'a> {
@@ -767,6 +820,8 @@ struct JsonReport<'a> {
     files_hashed: usize,
     /// The roots were walked for build dirs, rather than the last walk's list used.
     walked: bool,
+    /// `--lossy tmpdir`, when it ran.
+    tmpdir: Option<&'a tmpdir::Report>,
 }
 
 impl<'a> JsonReport<'a> {
@@ -781,6 +836,7 @@ impl<'a> JsonReport<'a> {
             compress_notes: &report.compress_notes,
             files_hashed: report.files_hashed,
             walked: report.walked,
+            tmpdir: report.tmpdir.as_ref(),
         }
     }
 }

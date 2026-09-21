@@ -36,6 +36,8 @@ use crate::inventory::{self, Inventory, ProfileInfo, Target};
 use crate::known;
 use crate::orphans::{self, Orphan, Orphans};
 use crate::seed::{self, Seeded};
+use crate::sys;
+use crate::tmpdir;
 
 /// Relative to `$HOME`. The digit follows the index file format.
 const DEFAULT_INDEX: &str = ".cache/dunnage/hashes-v1.bin";
@@ -44,15 +46,22 @@ pub const RUN_LOCK: &str = "run.lock";
 /// What a report calls the one group `across_families` makes, in place of a family dir.
 pub const ACROSS_FAMILIES: &str = "<across families>";
 /// Every pass that deletes rebuildable data; `lossy` takes these names.
-pub const LOSSY_PASSES: [&str; 4] = [orphans::NAME, evict::NAME, incremental::NAME, doc::NAME];
+pub const LOSSY_PASSES: [&str; 5] = [
+    orphans::NAME,
+    evict::NAME,
+    incremental::NAME,
+    doc::NAME,
+    tmpdir::NAME,
+];
 /// Every pass, in pipeline order; `passes` takes these names.
-pub const PASSES: [&str; 6] = [
+pub const PASSES: [&str; 7] = [
     orphans::NAME,
     evict::NAME,
     incremental::NAME,
     doc::NAME,
     compress::NAME,
     dedupe::NAME,
+    tmpdir::NAME,
 ];
 
 /// `$HOME/.cache/dunnage/hashes-v1.bin`; `None` without a `$HOME`.
@@ -153,6 +162,11 @@ pub struct Request {
     pub until_settled: bool,
     /// Walk the roots even when the build dirs of the last walk still hold.
     pub rediscover: bool,
+    /// The temp dir the `tmpdir` pass cleans. The front end names it: the session reads no
+    /// environment.
+    pub tmpdir: Option<PathBuf>,
+    /// With `tmpdir`: remove top-level entries with nothing inside modified for this many days.
+    pub tmpdir_idle_days: Option<u64>,
 }
 
 impl Request {
@@ -168,6 +182,7 @@ impl Request {
             evict_whole_target: config.evict.whole_target,
             incremental_idle_days: config.incremental.idle_days,
             orphans_project_idle_days: config.orphans.project_idle_days,
+            tmpdir_idle_days: config.tmpdir.idle_days,
             min_age: config.min_age.map(Duration::from_secs),
             min_size: config.min_size,
             across_families: config.across_families,
@@ -227,7 +242,20 @@ impl Request {
         ensure(
             self.orphans_project_idle_days.is_none() || self.enables(orphans::NAME),
             || "`--orphans-project-idle-days` needs `--lossy orphans`".into(),
-        )
+        )?;
+        ensure(
+            self.enables(tmpdir::NAME) == self.tmpdir_idle_days.is_some(),
+            || "`--lossy tmpdir` and `--tmpdir-idle-days` need each other".into(),
+        )?;
+        ensure(!self.enables(tmpdir::NAME) || self.tmpdir.is_some(), || {
+            "`--lossy tmpdir` needs the temp dir named".into()
+        })
+    }
+
+    /// Whether the `tmpdir` pass runs: enabled, and not left out by `passes`.
+    fn cleans_tmpdir(&self) -> bool {
+        self.enables(tmpdir::NAME)
+            && (self.passes.is_empty() || self.passes.iter().any(|name| name == tmpdir::NAME))
     }
 
     fn enables(&self, lossy: &str) -> bool {
@@ -331,6 +359,8 @@ pub struct RunReport {
     pub stopped: bool,
     /// The build dirs came from a walk of the roots, not from the last walk's list.
     pub walked: bool,
+    /// What the `tmpdir` pass did, when it ran.
+    pub tmpdir: Option<tmpdir::Report>,
 }
 
 /// What `advise` found.
@@ -577,10 +607,25 @@ impl Session {
                 }
             })
             .transpose()?;
-        // The cargo home, the stores and the module cache are runs of their own: they need no
-        // target and no root.
+        let temp = request
+            .tmpdir
+            .as_ref()
+            .filter(|_| request.cleans_tmpdir())
+            .map(|dir| {
+                let dir = dir.canonicalize().map_err(Error::at(dir.display()))?;
+                match tmpdir::check(&dir) {
+                    Some(why) => Err(Error::Invalid(format!("temp dir {}: {why}", dir.display()))),
+                    None => Ok(dir),
+                }
+            })
+            .transpose()?;
+        // The cargo home, the stores, the module cache and the temp dir are runs of their own:
+        // they need no target and no root.
         let only_home = request.roots.is_empty()
-            && (request.cargo_home.is_some() || !stores.is_empty() || go_modcache.is_some());
+            && (request.cargo_home.is_some()
+                || !stores.is_empty()
+                || go_modcache.is_some()
+                || temp.is_some());
         ensure(!request.roots.is_empty() || only_home, || {
             "no roots: name them on the command line or set `roots` in the config file".into()
         })?;
@@ -832,6 +877,29 @@ impl Session {
                 &mut report,
             )?;
             report.left_busy |= done == Some(Interrupted::OutOfBudget);
+        }
+        // Last: nothing above reads the temp dir, and the index dir is kept whatever its age.
+        if let Some(dir) = temp.as_ref().filter(|_| !control.stopped()) {
+            let keep: Vec<PathBuf> = self
+                .settings
+                .index
+                .parent()
+                .and_then(|parent| parent.canonicalize().ok())
+                .into_iter()
+                .collect();
+            let in_use = sys::paths_in_use(dir);
+            let idle_days = request.tmpdir_idle_days.unwrap_or(u64::MAX);
+            report.tmpdir = Some(
+                tmpdir::run(
+                    dir,
+                    idle_days,
+                    in_use.as_deref(),
+                    &keep,
+                    SystemTime::now(),
+                    dry_run,
+                )
+                .map_err(Error::at(dir.display()))?,
+            );
         }
         report.stopped = control.stopped();
         report.compress_notes = compress.notes();

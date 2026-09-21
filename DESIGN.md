@@ -864,6 +864,41 @@ writes the list back through a temp file and a rename.
   session without an index path walks every time.
 - **Not a file-system watcher.** Watching the tree is the `notify` question in `ideas.md`.
 
+## Temp dir pass (`src/tmpdir.rs`)
+
+Lossy, so it runs only with `--lossy tmpdir`, and only with `--tmpdir-idle-days` (or
+`[tmpdir] idle-days`). It is not an engine pass: the temp dir is no build dir, has no guard and
+no units, and the session runs it after the groups, under the run lock, without roots.
+
+- **The dir.** The front end names it with `sys::temp_dir()`: `$TMPDIR`, else on macOS the
+  per-user dir `confstr` knows, else the platform default. The session reads no environment. A
+  filesystem root is refused.
+- **What goes.** A top-level entry whose newest mtime anywhere inside, the entry itself
+  included, is older than the limit. Newest mtime, not atime: atime is off or relaxed on most
+  mounts, and a program that only reads its temp files still counts as gone.
+- **What stays.** An entry any process of the temp dir's owner holds a path in — current dir,
+  open file, mapped file: `lsof -Ffn -u <uid>` on macOS (a quarter of a second where every
+  process takes seconds), `/proc/*/{cwd,fd,maps}` on Linux. An entry holding a socket: Linux
+  names a listening socket by inode only. An entry whose walk meets another filesystem, an
+  unreadable file or an mtime in the future. An entry holding a file with a flag that forbids
+  its removal (`uchg`, `schg`, `sunlnk`, `restricted` and the append flags on macOS, `i` and `a`
+  on Linux): macOS keeps its services' dirs in the user's temp dir under `sunlnk`, and a removal
+  would empty them and then fail. An entry holding the hash index. When open files
+  cannot be listed at all (Windows), nothing is removed and the report says why.
+- **The walk** follows no symlink, the entry's own included, and stops at the first young mtime,
+  so the thousands of live entries a temp dir holds cost a few stats each. An old entry is walked
+  again right before it goes.
+- **The removal** is `remove_dir_all`, which never follows a link out; a dir its owner made
+  read-only gets the owner's write bit back and one more try.
+
+Known limits: a process that opens a file in an entry between the check and the removal loses
+it — the window is one walk long; the daemon runs the pass once a day on its own (`TMPDIR_EVERY`)
+rather than with every run the build dirs start.
+
+`tests/tmpdir.rs`: the age rule, a young file deep in an old tree, a file held open and a
+current dir, a socket, a kept path, open files unknown, links removed and not followed, a
+read-only dir, a run without roots, and the request checks — on macOS and on Linux (lima).
+
 ## Daemon (`src/daemon/`)
 
 In the binary, not the library: only a process has triggers. Every change it makes is one

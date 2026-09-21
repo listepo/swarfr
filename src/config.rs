@@ -42,6 +42,8 @@ pub struct Config {
     #[serde(default)]
     pub orphans: OrphansConfig,
     #[serde(default)]
+    pub tmpdir: TmpDir,
+    #[serde(default)]
     pub daemon: Daemon,
     #[serde(default)]
     pub discovery: Discovery,
@@ -73,6 +75,14 @@ pub struct Incremental {
 pub struct OrphansConfig {
     /// Also remove build dirs whose project manifest is gone, once idle this many days.
     pub project_idle_days: Option<u64>,
+}
+
+/// `[tmpdir]`: the pass that removes what other programs left in the temp dir.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct TmpDir {
+    /// Remove top-level entries with nothing inside modified for this many days.
+    pub idle_days: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]

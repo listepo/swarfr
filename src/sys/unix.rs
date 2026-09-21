@@ -42,6 +42,8 @@ const PERMISSION_BITS: u32 = 0o7777;
 /// that is not copy-on-write cannot be reflinked, so a plan that includes it is a plan that
 /// would fail. Everything else Linux keeps here (`NOATIME`, `NODUMP`, `SYNC`, …) says nothing
 /// about whether a file may be replaced, and a flag we do not understand must not become a skip.
+/// Flags under which a file cannot be removed or changed.
+pub const PROTECTED: u32 = IFlags::IMMUTABLE.union(IFlags::APPEND).bits();
 const KNOWN: IFlags = IFlags::COMPRESSED
     .union(IFlags::IMMUTABLE)
     .union(IFlags::APPEND)
@@ -260,6 +262,45 @@ pub fn tool_paths(tools: &[&str]) -> Option<Vec<super::Held>> {
         }
     }
     Some(cwds)
+}
+
+/// What every process of `dir`'s owner holds, from `/proc`: the current dir, what each descriptor
+/// names and every mapped file. A socket or a pipe names no path, and a file deleted while open
+/// is named with ` (deleted)` after it, which matches nothing. `None` where there is no `/proc`.
+pub fn user_paths(dir: &Path) -> Option<Vec<PathBuf>> {
+    let uid = fs::metadata(dir).ok()?.uid();
+    let mut paths = Vec::new();
+    for entry in fs::read_dir("/proc").ok()? {
+        let Ok(entry) = entry else { continue };
+        let proc = entry.path();
+        let is_pid = entry
+            .file_name()
+            .to_string_lossy()
+            .bytes()
+            .all(|b| b.is_ascii_digit());
+        // A process can end between the listing and the reads; its paths go with it.
+        if !is_pid || fs::metadata(&proc).map(|meta| meta.uid()).ok() != Some(uid) {
+            continue;
+        }
+        paths.extend(fs::read_link(proc.join("cwd")));
+        if let Ok(fds) = fs::read_dir(proc.join("fd")) {
+            for fd in fds.flatten() {
+                paths.extend(
+                    fs::read_link(fd.path())
+                        .into_iter()
+                        .filter(|p| p.is_absolute()),
+                );
+            }
+        }
+        if let Ok(maps) = fs::read_to_string(proc.join("maps")) {
+            // `address perms offset dev inode path`, the path from the sixth field on.
+            paths.extend(maps.lines().filter_map(|line| {
+                let path = line.splitn(6, ' ').nth(5)?.trim_start();
+                path.starts_with('/').then(|| PathBuf::from(path))
+            }));
+        }
+    }
+    Some(paths)
 }
 
 #[cfg(test)]

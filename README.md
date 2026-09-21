@@ -81,7 +81,7 @@ Only dirs carrying cargo's own `CACHEDIR.TAG` count as targets. `--lossy` enable
 pass that deletes rebuildable data; lossless passes need no flag. How the engine keeps a target
 safe is described in `DESIGN.md`, "Engine" and "Safety invariants".
 
-`--pass <PASS>` runs only the passes you name (`orphans`, `evict`, `incremental`, `doc`,
+`--pass <PASS>` runs only the passes you name (`orphans`, `evict`, `incremental`, `doc`, `tmpdir`,
 `compress`, `dedupe`), which
 is how the benchmarks tell them apart. `--min-age` and `--min-size` move the two floors below;
 they exist for measurements, and the defaults are what `docs/bench.md` justifies.
@@ -116,6 +116,15 @@ rebuild the next time you edit a crate in that workspace.
 rustdoc output `cargo doc` writes again from scratch and no build reads — `cargo clean --doc` by
 another name. It goes only while this tool holds the target's build locks and nothing in the
 target is being built, and its size is reported like every other removal.
+
+**tmpdir** deletes, so it is off unless you name it: `--lossy tmpdir --tmpdir-idle-days <N>`
+removes every top-level entry of the per-user temp dir (`$TMPDIR`, or on macOS the one
+`getconf DARWIN_USER_TEMP_DIR` names) in which nothing was modified for N days. Everything old
+counts, not only what build tools leave there. An entry stays when any of your processes has a
+current dir or an open or mapped file in it, when it holds a socket or a file flagged against removal
+(as macOS guards its services' dirs), or when its walk meets another filesystem or a file it
+cannot read; where open files cannot be listed (Windows) nothing
+is removed. It needs no roots, and `--dry-run` lists every entry with its size and age first.
 
 **evict** deletes, so it is off unless you name it: `--lossy evict` plus `--evict-idle-days <N>`
 (profile dirs such as `target/debug` with no build for N days), `--evict-max-total-gib <N>`
@@ -241,6 +250,9 @@ whole-target = true         # take the target dir itself once all of its profile
 
 [orphans]
 project-idle-days = 7       # with `orphans`: also a target whose Cargo.toml is gone, idle this long
+
+[tmpdir]
+idle-days = 7               # with `tmpdir`: temp dir entries with nothing modified this long
 
 [incremental]
 idle-days = 7

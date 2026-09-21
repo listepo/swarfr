@@ -13,7 +13,6 @@ Design in `DESIGN.md`, measurements in `docs/research.md`.
 | T24 | todo | P1 | 3 | 0% | |
 | T21 | todo | P2 | 5 | 0% | |
 | T38.1 | todo | P2 | 3 | 0% | |
-| T42 | todo | P2 | 3 | 0% | |
 
 Blockers, take these first. **T24** blocks T21: nothing on Windows can be tested without it.
 
@@ -122,14 +121,3 @@ gone, with a fixture test for both.
 build, but it is parsing cargo's output, a heuristic; (b) a record dunnage writes itself when
 `seed`/`worktree add`/the daemon sees a build dir being used from a workspace — exact, but only
 for dirs it has seen; (c) configuration: `[owners]` mapping build dirs to workspaces.
-
-### T42. `$TMPDIR` cleanup as a lossy pass
-
-The per-user temp dir fills with what other programs leave behind (about 128 GiB here), and
-macOS's own cleanup does not keep up. A lossy pass, opt-in like every other: `--lossy tmpdir`
-with `[tmpdir] idle-days` in the config (7 as the example), and the daemon runs it when the
-config names it. It removes any top-level entry of `$TMPDIR` whose newest mtime anywhere inside
-is older than `idle-days`, except what a running process holds open. Decided with the creator:
-everything old, not only known build leftovers; the pass is opt-in; age is the newest mtime
-inside, not atime. Done means a dry run lists what would go and why, a real run frees it, and
-tests on fake temp dirs cover the age rule, an open file, and a young file deep in an old dir.

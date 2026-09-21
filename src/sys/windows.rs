@@ -31,6 +31,8 @@ const HIDDEN: u32 = 0x2;
 const SYSTEM: u32 = 0x4;
 const REPARSE_POINT: u32 = 0x400;
 const KNOWN: u32 = COMPRESSED | READONLY | HIDDEN | SYSTEM | REPARSE_POINT;
+/// No attribute stops a removal the way an immutable flag does.
+pub const PROTECTED: u32 = 0;
 
 /// No inode number is reachable without a handle, so identity is the path: distinct paths are
 /// distinct files. Two hardlinks to one file therefore look like two files — which is only ever
@@ -64,6 +66,11 @@ pub fn flags(_path: &Path, meta: &Metadata) -> u32 {
 /// Not told here: finding a process's current dir takes reading its memory. Every quiet unit
 /// stays unsure.
 pub fn tool_paths(_tools: &[&str]) -> Option<Vec<super::Held>> {
+    None
+}
+
+/// Not looked at on Windows yet: a pass that needs it removes nothing there.
+pub fn user_paths(_dir: &Path) -> Option<Vec<PathBuf>> {
     None
 }
 

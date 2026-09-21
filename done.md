@@ -1882,3 +1882,74 @@ written; the real `~/Library/Developer/Xcode/DerivedData` is read at most.
   configurations.
 - `~/.cache/dunnage` is absent, no `_.build.lock` is left in `$TMPDIR`, and the real DerivedData
   gained nothing.
+
+### T43. `$TMPDIR` cleanup as a lossy pass
+
+The per-user temp dir fills with what other programs leave behind (about 128 GiB here), and
+macOS's own cleanup does not keep up. A lossy pass, opt-in like every other: `--lossy tmpdir`
+with `[tmpdir] idle-days` in the config (7 as the example), and the daemon runs it when the
+config names it. It removes any top-level entry of `$TMPDIR` whose newest mtime anywhere inside
+is older than `idle-days`, except what a running process holds open. Decided with the creator:
+everything old, not only known build leftovers; the pass is opt-in; age is the newest mtime
+inside, not atime. Done means a dry run lists what would go and why, a real run frees it, and
+tests on fake temp dirs cover the age rule, an open file, and a young file deep in an old dir.
+
+(Filed as T42 at first; T42 is the rename to dunnage, in `done.md`.)
+
+#### Execution plan
+
+1. `src/sys`: the paths every process of one user holds — current dirs, open and mapped files:
+   macOS `lsof -Ffn -u <uid>`, Linux `/proc/*/{cwd,fd,maps}`, Windows none. `None` when it
+   cannot be told; then the pass removes nothing.
+2. `src/tmpdir.rs`: for each top-level entry, a walk (no symlinks followed) that stops at the
+   first mtime newer than the cutoff. Kept: a young entry, one a process holds a path in, one
+   holding a socket (Linux shows a listening socket only as an inode), one crossing into
+   another filesystem, one holding the hash index. An old entry is walked again right before it
+   is removed. Refused: a temp dir that is a filesystem root.
+3. Wiring: `tmpdir` in `LOSSY_PASSES` and `PASSES`; `Request::{tmpdir, tmpdir_idle_days}`, the
+   config's `[tmpdir] idle-days` and `--tmpdir-idle-days`, which need `--lossy tmpdir` and the
+   other way round; the front ends (CLI and daemon) fill in `sys::temp_dir()`. It runs without
+   roots, like `--store`. `RunReport.tmpdir`, printed and in `--json`.
+4. Tests: `tests/tmpdir.rs` on temp dirs standing in for `$TMPDIR` — the age rule, a young file
+   deep in an old dir, a file held open, a socket, a symlink out, dry run, the request checks.
+   Docs: README, usage, DESIGN, architecture. Never run against the real `$TMPDIR`.
+
+#### Result
+
+- `src/sys`: `paths_in_use(dir)`, every path a process of the dir's owner holds — macOS
+  `lsof -Ffn -u <uid>` (0.26 s here, against 2.6 s for every process), Linux `/proc/*/{cwd,fd,
+  maps}`, Windows `None`.
+- `src/tmpdir.rs`: the pass. A top-level entry goes when its newest mtime is past the limit; it
+  stays when a process holds a path in it, it holds a socket, its walk meets another
+  filesystem, an unreadable file or a future mtime, or it holds the hash index. The walk follows
+  no link and stops at the first young mtime; an old entry is walked again before removal; a
+  read-only dir gets its owner write bit back for a second try. No open-file list: nothing goes.
+- Wiring: `tmpdir` in `LOSSY_PASSES` and `PASSES`; `Request::{tmpdir, tmpdir_idle_days}`,
+  `--tmpdir-idle-days`, `[tmpdir] idle-days`, checked against `--lossy tmpdir` both ways; the
+  front ends name `sys::temp_dir()`. Runs without roots, after the groups, under the run lock.
+  `RunReport.tmpdir`, printed with every entry and in `--json`.
+- The daemon runs it as a request of its own once a day (`TMPDIR_EVERY`), records
+  `last_tmpdir` in `daemon.json`, and `daemon status` prints it.
+- `RunArgs` is boxed in `Cmd::Run`: the new flag tipped clippy's `large_enum_variant`.
+- Found on the way: `done.md` had been cut to one card by the T37 and by the T32.1 commits; it
+  is restored, all 42 cards, in a commit of its own on the T30.1 branch. And T42 was already the
+  rename: this task was renumbered.
+- Docs: README, usage (table, flags, daemon, recipe, config), DESIGN "Temp dir pass",
+  architecture, toolchain (`ps`, `lsof`, `getconf`).
+
+#### Verified
+
+- `just check` (219 tests) and `just check-cross` pass.
+- `tests/tmpdir.rs`, 6 tests (7 with the flag test on macOS), green on macOS and on Linux (the lima VM, started for this and
+  stopped again): the age rule and the limit's edge, a young file deep in an old tree, a file
+  held open by `tail -f` and a current dir held by `sleep`, a socket, a kept path, open files
+  unknown, links removed and not followed, a read-only dir, a run without roots and with
+  `passes = [tmpdir]`, and the request checks.
+- The CLI on a fake `TMPDIR` with an isolated `HOME`: the flag check, the dry-run listing, the
+  `--json` report, and the real removal of the old entry only.
+- On macOS a `uchg` file keeps its whole entry, nothing inside removed (the seventh test).
+- The creator's own run on the real `$TMPDIR` at one day: 131G and 41,781 entries went to 81G
+  and 27,204. It met about 150 of macOS's service dirs (`com.apple.*` and others, `sunlnk` and
+  `com.apple.rootless`), whose removal failed with EPERM; such an entry is now kept as protected.
+- Against the real `$TMPDIR` the agent ran a dry run only; the removal was the creator's. `~/.cache/dunnage` is absent, no `_.build.lock` is left.
+

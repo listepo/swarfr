@@ -22,6 +22,7 @@ too slow, see `DESIGN.md`).
 | meson | global (mise), optional | `tests/meson.rs`: a real Meson build dir, skipped without it | https://github.com/mesonbuild/meson |
 | go | global (brew), optional | `tests/store.rs`: the `GOCACHE` oracle for `--store`; `tests/go.rs`: `go mod verify` after `run --go`; skipped without it; `docs/bench.md` numbers | https://github.com/golang/go |
 | zip | system (macOS, most Linux distributions), optional | `tests/go.rs`: a module zip for the offline proxy dir, skipped without it | https://infozip.sourceforge.net/Zip.html |
+| ps, lsof, getconf | system (macOS) | The no-lock tier's process check and the `tmpdir` pass's open files (`lsof -Ffn`); `getconf DARWIN_USER_TEMP_DIR` for the temp dir without `TMPDIR` | https://opensource.apple.com/source/lsof/ |
 | lima | global (brew / mise) | A Linux VM with a btrfs loopback image: the only way to test the Linux half from a Mac | https://github.com/lima-vm/lima |
 
 ## cargo

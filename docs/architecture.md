@@ -284,6 +284,8 @@ What the earlier arguments still demand of it:
   later round. The session has the knob; the CLI leaves it unset, the daemon sets it low.
 - **Lossy passes run from the daemon only when the config enables them**, exactly as from a
   scheduled CLI run. No trigger turns one on.
+- **The temp dir is cleaned on the clock**, once a day, as a request of its own: it has no build
+  that goes cold, and walking it with every run would cost more than it frees.
 - **Low priority** is the service unit's job (`Nice`, `LowPriorityIO`, `IOSchedulingClass=idle`),
   not code.
 
