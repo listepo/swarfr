@@ -91,20 +91,21 @@ fn cmake(dir: &Path, args: &[&str]) -> std::process::Output {
         .unwrap()
 }
 
-fn cmake_available() -> bool {
-    let found = Command::new("cmake")
+fn available(tool: &str) -> bool {
+    let found = Command::new(tool)
         .arg("--version")
         .output()
         .is_ok_and(|out| out.status.success());
     if !found {
-        eprintln!("skipped: no `cmake` on this machine");
+        eprintln!("skipped: no `{tool}` on this machine");
     }
     found
 }
 
-/// Two executables from the same sources with debuginfo, configured into `build/` and built, then
-/// every file moved back two days, sources and outputs alike, past the quiet floor.
-fn project(root: &Path) -> PathBuf {
+/// Two executables from the same sources with debuginfo, configured into `build/` with
+/// `generator` and built, then every file moved back two days, sources and outputs alike, past
+/// the quiet floor.
+fn project(root: &Path, generator: &str) -> PathBuf {
     let source = root.join("app");
     fs::create_dir_all(&source).unwrap();
     fs::write(
@@ -130,7 +131,7 @@ fn project(root: &Path) -> PathBuf {
     )
     .unwrap();
     let build = root.join("build");
-    let configured = cmake(root, &["-S", "app", "-B", "build", "-G", "Unix Makefiles"]);
+    let configured = cmake(root, &["-S", "app", "-B", "build", "-G", generator]);
     assert!(configured.status.success(), "{configured:?}");
     let built = cmake(root, &["--build", "build"]);
     assert!(built.status.success(), "{built:?}");
@@ -160,42 +161,21 @@ fn builds_anything(root: &Path) -> bool {
 
 #[test]
 fn after_compress_and_dedupe_cmake_builds_nothing_and_the_binaries_run() {
-    if !cmake_available() {
+    if !available("cmake") {
         return;
     }
     let (_tmp, root) = root();
-    let build = project(&root);
+    let build = project(&root, "Unix Makefiles");
     assert!(
         !builds_anything(&root),
         "the control: a second build is a no-op"
     );
     let before = allocated_bytes(&build);
 
-    let index = RefCell::new(HashIndex::default());
-    let compress = Compress::new(&index);
-    let dedupe = Dedupe::new(&index);
-    let units = CMAKE.units(&build).unwrap();
-    let report = engine::run(&units, &[&compress, &dedupe], &Options::default(), &CMAKE).unwrap();
-
-    assert!(report.busy.is_empty(), "{report:?}");
-    assert_eq!(report.quiet, units);
-    let caps = dunnage::sys::caps(&build);
-    if caps.compress {
-        assert!(report.passes[0].applied > 0, "{report:?}");
-        if dunnage::sys::ALLOCATED_SHOWS_COMPRESSION {
-            assert!(allocated_bytes(&build) < before, "{before}");
-        }
-    }
+    run_passes(&build, before);
     // The oracle: nothing to compile or link, and both binaries still work.
     assert!(!builds_anything(&root), "rebuilt after the passes");
-    for binary in ["app", "twin"] {
-        let ran = Command::new(build.join(binary)).output().unwrap();
-        assert!(ran.status.success(), "{ran:?}");
-        assert_eq!(
-            String::from_utf8_lossy(&ran.stdout),
-            "the same words again 7\n"
-        );
-    }
+    binaries_run(&build);
     // And the oracle can say no: a new mtime on a source is enough for a build.
     File::options()
         .write(true)
@@ -204,4 +184,72 @@ fn after_compress_and_dedupe_cmake_builds_nothing_and_the_binaries_run() {
         .set_modified(SystemTime::now())
         .unwrap();
     assert!(builds_anything(&root));
+}
+
+/// Compress and dedupe on the build dir, which must shrink where compression is possible.
+fn run_passes(build: &Path, before: u64) {
+    let index = RefCell::new(HashIndex::default());
+    let compress = Compress::new(&index);
+    let dedupe = Dedupe::new(&index);
+    let units = CMAKE.units(build).unwrap();
+    let report = engine::run(&units, &[&compress, &dedupe], &Options::default(), &CMAKE).unwrap();
+
+    assert!(report.busy.is_empty(), "{report:?}");
+    assert_eq!(report.quiet, units);
+    if dunnage::sys::caps(build).compress {
+        assert!(report.passes[0].applied > 0, "{report:?}");
+        if dunnage::sys::ALLOCATED_SHOWS_COMPRESSION {
+            assert!(allocated_bytes(build) < before, "{before}");
+        }
+    }
+}
+
+fn binaries_run(build: &Path) {
+    for binary in ["app", "twin"] {
+        let ran = Command::new(build.join(binary)).output().unwrap();
+        assert!(ran.status.success(), "{ran:?}");
+        assert_eq!(
+            String::from_utf8_lossy(&ran.stdout),
+            "the same words again 7\n"
+        );
+    }
+}
+
+/// What `ninja -n` would run in `build`: nothing is `ninja: no work to do.`
+fn ninja_plans_nothing(build: &Path) -> bool {
+    let planned = Command::new("ninja")
+        .args(["-n", "-d", "explain"])
+        .current_dir(build)
+        .output()
+        .unwrap();
+    let said = String::from_utf8_lossy(&planned.stdout);
+    assert!(planned.status.success(), "{planned:?}");
+    said.contains("no work to do")
+}
+
+#[test]
+fn after_compress_and_dedupe_ninja_plans_nothing_and_the_binaries_run() {
+    if !available("cmake") || !available("ninja") {
+        return;
+    }
+    let (_tmp, root) = root();
+    let build = project(&root, "Ninja");
+    assert!(ninja_plans_nothing(&build), "the control");
+    let before = allocated_bytes(&build);
+
+    run_passes(&build, before);
+
+    assert!(
+        ninja_plans_nothing(&build),
+        "ninja would build after the passes"
+    );
+    binaries_run(&build);
+    // And the oracle can say no.
+    File::options()
+        .write(true)
+        .open(root.join("app/words.c"))
+        .unwrap()
+        .set_modified(SystemTime::now())
+        .unwrap();
+    assert!(!ninja_plans_nothing(&build));
 }

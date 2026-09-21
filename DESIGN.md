@@ -793,9 +793,28 @@ the tests were written on; the tests pin a 9.0 SDK with `global.json`.
 - **Clones only.** `ar` may update an archive in place.
 - **No seed.** The cache and the generated build files hold absolute paths.
 
-The oracle is `cmake --build` with the Makefiles generator: after compress and dedupe it prints
-no `Building` and no `Linking` line, and the binaries still run; a new mtime on a source makes it
-build again. Ninja and Meson build dirs are T32.1.
+The oracles, after compress and dedupe: with the Makefiles generator, `cmake --build` prints no
+`Building` and no `Linking` line; with the Ninja generator, `ninja -n` reports no work. The
+binaries still run, and a new mtime on a source makes either build again.
+
+**Ninja takes no lock** (1.13.2, checked in T32.1): while one `ninja` runs a slow rule, `lsof`
+shows nothing of its build dir held open, and a second `ninja` in the same dir starts and builds
+alongside it. So a CMake+Ninja dir stays under the quiet tier with the rest.
+
+## Meson (`src/eco/meson.rs`)
+
+- **Claim.** A dir holding `meson-private/coredata.dat` and `meson-info/meson-info.json`; the
+  JSON's `directories.source` is the owner, `meson.build` the manifest. Meson refuses in-source
+  builds, and a dir whose source lies inside it is not claimed anyway, as for CMake.
+- **Not a cargo target.** Meson writes a `CACHEDIR.TAG` into its build dirs too; the cargo
+  adapter already takes only a tag that says cargo wrote it.
+- **No lock.** `meson-private/meson.lock` is held while Meson configures or regenerates, not
+  while Ninja builds. `Guard::Quiet`, with `meson`, `ninja` and `samu` as the tools. Clones
+  only, no seed, for the same reasons as CMake.
+
+`tests/meson.rs`: the claim and the owner from fixtures, what is refused, and, where `meson` and
+`ninja` are installed, a real project after compress and dedupe: `ninja -n` reports no work,
+the binaries run, and a touched source is planned again.
 
 ## Known build dirs (`src/known.rs`)
 

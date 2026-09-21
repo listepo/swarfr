@@ -16,7 +16,9 @@ too slow, see `DESIGN.md`).
 | sccache | global (mise) | `scripts/bench.sh`: the variant the tool is compared against | https://github.com/mozilla/sccache |
 | swift | global (Xcode), optional | `tests/swiftpm.rs`: the lock and rebuild oracles for SwiftPM, skipped without it; `docs/bench.md` numbers | https://github.com/swiftlang/swift |
 | dotnet | global (installer), optional, a 9.0 SDK | `tests/dotnet.rs`: the MSBuild no-op oracle, skipped without it | https://github.com/dotnet/sdk |
-| cmake | global (mise), optional, with the system `cc` | `tests/cmake.rs`: the Makefiles no-op oracle, skipped without it; `docs/bench.md` numbers | https://github.com/Kitware/CMake |
+| cmake | global (mise), optional, with the system `cc` | `tests/cmake.rs`: the Makefiles and Ninja no-op oracles, skipped without it; `docs/bench.md` numbers | https://github.com/Kitware/CMake |
+| ninja | global (mise), optional | `tests/cmake.rs`, `tests/meson.rs`: `ninja -n` plans nothing after a run, skipped without it | https://github.com/ninja-build/ninja |
+| meson | global (mise), optional | `tests/meson.rs`: a real Meson build dir, skipped without it | https://github.com/mesonbuild/meson |
 | go | global (brew), optional | `tests/store.rs`: the `GOCACHE` oracle for `--store`; `tests/go.rs`: `go mod verify` after `run --go`; skipped without it; `docs/bench.md` numbers | https://github.com/golang/go |
 | zip | system (macOS, most Linux distributions), optional | `tests/go.rs`: a module zip for the offline proxy dir, skipped without it | https://infozip.sourceforge.net/Zip.html |
 | lima | global (brew / mise) | A Linux VM with a btrfs loopback image: the only way to test the Linux half from a Mac | https://github.com/lima-vm/lima |

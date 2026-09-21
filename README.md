@@ -194,6 +194,9 @@ equal files are shared by clones only. The owner is the source dir the cache nam
 dir whose `CMakeLists.txt` is gone shows up as such. An in-source build (`cmake .`) is never
 touched: there the build dir is the source tree. On fmt built in debug with its tests, the build
 dir went from 158 MiB to 52 MiB and the next `cmake --build` built nothing (`docs/bench.md`).
+Meson build dirs are found by `meson-private/coredata.dat` and treated the same way, with the
+source dir `meson-info` names as the owner. With Ninja under either, `ninja -n` has no work after
+a run.
 
 **advise** changes nothing: it reads the manifests and cargo configs of the projects it finds
 and names what makes their targets bigger than they need to be — full debuginfo where

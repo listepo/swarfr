@@ -57,9 +57,10 @@ different safety claim from the one `DESIGN.md` makes, and it must be stated as 
   `CMAKE_HOME_DIRECTORY`; `meson-info/` marks a Meson one; `build.ninja` plus `.ninja_log` a bare
   Ninja one. Plain Make has no marker at all and builds in the source tree, so it is out.
 - **Lock.** None that an outsider can rely on. Ninja and Make take no inter-process lock for the
-  build (*unverified* for recent Ninja releases — check before relying on either answer). This is
-  the weakest point: the adapter would need `min-age`, a look at running processes, or an
-  explicit "I am not building" flag from the user.
+  build; for Ninja 1.13.2 that was checked (T32.1, `DESIGN.md`, "CMake"). Meson's own lock is
+  held only while it configures. Hence the quiet tier: `min-age` and a look at running processes.
+- Done: CMake (T32) and Meson (T32.1) build dirs. A bare Ninja dir (`build.ninja` plus
+  `.ninja_log`, as GN leaves) is not claimed yet.
 - **Freshness.** Make compares mtimes. Ninja compares mtimes and the command hash in
   `.ninja_log`. Both survive a same-content, same-mtime replacement, which is exactly what the
   engine does. `.ninja_log`, `.ninja_deps` and `CMakeFiles/` bookkeeping are volatile paths.

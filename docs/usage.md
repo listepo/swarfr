@@ -94,6 +94,8 @@ if they keep a project busy.
 CMake build dirs (any dir holding `CMakeCache.txt`) are treated the same way: files older than
 a day only, a `cmake`, `make`, `gmake`, `ninja` or `ctest` process working there makes the dir
 busy, clones only. A build dir configured in the source tree itself (`cmake .`) is skipped.
+Meson build dirs (`meson-private/coredata.dat` with `meson-info/`) get the same, with `meson`,
+`ninja` and `samu` as the processes looked for.
 
 ## Commands
 
@@ -301,7 +303,7 @@ lock-budget-secs = 2     # how long a group may hold a build's locks
 The family key is the git common dir that `status` prints for the family. A `skip-paths` entry
 is a prefix of the build dir's position in its checkout, compared by whole components; a
 skipped build dir is neither worked on nor counted by any pass. `ecosystems` takes the adapter
-names `status` prints: `cargo`, `swiftpm`, `dotnet`, `cmake`.
+names `status` prints: `cargo`, `swiftpm`, `dotnet`, `cmake`, `meson`.
 `[index] idle-days` is how long the hash index keeps a file's hash that no run has looked up
 (default 30); forgetting one costs a single rehash.
 

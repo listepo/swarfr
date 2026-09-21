@@ -1,5 +1,5 @@
 - T24. A place where the Windows tests run
 - T21. Windows: NTFS compression and ReFS block cloning
 - T30.1. Swift: Xcode DerivedData
-- T32.1. C and C++: Ninja and Meson
 - T38.1. Monorepo: an owner for a build dir outside its checkout
+- T42. `$TMPDIR` cleanup as a lossy pass

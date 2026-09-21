@@ -110,7 +110,7 @@ How the adapters of `docs/ecosystems.md` answer:
 | SwiftPM | `.build/` next to `Package.swift` | `.build/` | `Lock` (spike) | `ClonesOnly` | no |
 | Xcode | `info.plist` with `WorkspacePath`, via `well_known` | the DerivedData entry | `Quiet` | `ClonesOnly` | no |
 | .NET | `obj/project.assets.json` | `obj/`, `bin/` | `Quiet` | `ClonesOnly`, link refused | no |
-| CMake / Meson / Ninja | `CMakeCache.txt`, `meson-info/`, `.ninja_log` | the build dir | `Quiet` | `ClonesOnly` | no |
+| CMake / Meson / Ninja | `CMakeCache.txt`, `meson-private/coredata.dat` + `meson-info/`, `.ninja_log` (not yet) | the build dir | `Quiet` | `ClonesOnly` | no |
 | immutable store, Go | named by the user, `go env` | the store | `Immutable` | — | — |
 
 Rules the engine enforces, so that no adapter can get them wrong:

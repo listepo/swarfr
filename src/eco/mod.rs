@@ -8,6 +8,7 @@ pub mod cargo;
 pub mod cmake;
 pub mod dotnet;
 pub mod go;
+pub mod meson;
 pub mod store;
 pub mod swiftpm;
 
@@ -160,11 +161,12 @@ impl Sharing {
 }
 
 /// Every adapter, in the order the shared walk asks them.
-pub static REGISTRY: [&dyn Ecosystem; 4] = [
+pub static REGISTRY: [&dyn Ecosystem; 5] = [
     &cargo::CARGO,
     &swiftpm::SWIFTPM,
     &dotnet::DOTNET,
     &cmake::CMAKE,
+    &meson::MESON,
 ];
 
 /// The registered adapter called `name`.
