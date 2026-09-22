@@ -3,3 +3,4 @@
 - T38.1. Monorepo: an owner for a build dir outside its checkout
 - T45. `dunnage sweep`: after tests or builds, remove everything that is not needed
 - T46. `dunnage watch`: optimize the artifact dirs as soon as a build or test run ends
+- T47. `worktrees`: find abandoned git worktrees and remove them

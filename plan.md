@@ -15,6 +15,7 @@ Design in `DESIGN.md`, measurements in `docs/research.md`.
 | T38.1 | todo | P2 | 3 | 0% | |
 | T45 | todo | P1 | 3 | 0% | |
 | T46 | todo | P1 | 4 | 0% | |
+| T47 | todo | P1 | 4 | 0% | |
 
 Blockers, take these first. **T24** blocks T21: nothing on Windows can be tested without it.
 
@@ -184,4 +185,58 @@ daemon uses the same trigger.
 Decided by the creator: `watch` does not wait `run`'s hour (`min-age` keeps a file the next
 build rewrites from being compressed for nothing); its floor is the settle window, 30 s, and a
 `--min-age` flag raises it.
+
+### T47. `worktrees`: find abandoned git worktrees and remove them
+
+Asked by the creator: find the linked git worktrees nobody works in any more and remove them —
+the checkout and its build dirs — without ever removing one that is still needed. Unlike every
+other pass this one removes sources, so the docs' promise "only build output is ever removed"
+gets its one exception, named in `README.md`, `docs/usage.md` and `DESIGN.md`.
+
+A lossy pass, `--lossy worktrees --worktrees-idle-days N`, off unless named. `--dry-run` lists
+every worktree it looked at, and for each one kept the first criterion that kept it; every
+removal is printed with its reason.
+
+**A worktree is removed only when every criterion holds.** Any one that fails, or that cannot be
+checked, keeps it.
+
+1. **A linked worktree of a repository under the roots.** It comes from `git worktree list
+   --porcelain` of that repository. The main worktree, a bare repository, and a submodule's
+   checkout are never candidates. A worktree outside the roots is never touched, even when its
+   repository is under them.
+2. **Not locked.** `git worktree lock` is how its owner says "mine": a lock with or without a
+   reason keeps it (the `worktrees` skill locks every agent worktree this way).
+3. **Its directory is there and readable, on a mounted volume.** A missing directory (`prunable`)
+   is reported, not pruned: an unmounted disk looks the same.
+4. **Clean.** `git status --porcelain` is empty: no modified, staged, or untracked file, and no
+   merge, rebase, cherry-pick, revert, or bisect in progress in its git dir.
+5. **No ignored file outside build dirs.** Ignored files are not in `git status`, and
+   `git worktree remove` deletes them without asking. Local `.env` files, editor state and
+   secrets live there. Every ignored path must lie inside a build dir an adapter claims
+   (`target/`, `.build/`, `bin/` and `obj/`, …); anything else keeps the worktree, and is named.
+6. **Nothing only here.** Its HEAD commit is reachable from the default branch or from a
+   remote-tracking branch: merged, or pushed. An unmerged, unpushed branch is work in progress.
+   A detached HEAD that no other ref reaches would become unreachable, so it keeps the worktree
+   whatever else holds.
+7. **Idle for N days.** No file in it, its build dirs included, modified for N days, and nothing
+   in its own git dir (`.git/worktrees/<name>`: `HEAD`, `index`, `logs/HEAD`) younger either. A
+   checkout, commit, `git status` refresh or build counts as use.
+8. **Not in use now.** No process of the user has its current dir or an open file in it (the
+   check `tmpdir` uses), no build holds a lock in its build dirs, and it does not contain the
+   directory `dunnage` was started from.
+9. **Not kept by the config.** A family with `skip = true`, and a new `[worktrees] keep` list of
+   paths or globs, keep it.
+
+**How it is removed.** Its build dirs go first under their own guards, as `orphans` removes
+them. Then `git worktree remove` runs without `--force`, so git refuses on its own if it finds
+anything the checks missed. Never `rm -rf`, never `--force`, never `git worktree prune`. The branch
+is kept: removing a worktree deletes no commit.
+
+Done when: on fixture repositories in temp dirs, each criterion has a test that keeps the
+worktree when it alone fails (locked, dirty, untracked, ignored `.env`, merge in progress,
+unpushed branch, orphan detached HEAD, young file, held by a process, a lock held, config keep,
+missing dir), and one where every criterion holds and it is removed while its branch remains.
+
+Open for the creator: the default idle days (proposed: none, the flag is required, as for
+`evict`; 14 inside `sweep`), and whether `sweep` (T45) includes this pass.
 
