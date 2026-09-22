@@ -150,8 +150,8 @@ Done when: `dunnage sweep --dry-run` on the fixture roots lists every removal ea
 on its own with the same thresholds, `dunnage sweep` makes them, the next `cargo build` of the
 profile just tested is a no-op, and `docs/usage.md` has it under Commands and Recipes.
 
-Open for the creator: the default thresholds (proposed: `evict` and `incremental` at 7 idle days,
-`orphans` projects at 7, `tmpdir` at 1 day, `min-age` as `run`'s) and the name.
+Decided by the creator: the name `sweep`, and the default thresholds — `evict` and
+`incremental` at 7 idle days, `orphans` projects at 7, `tmpdir` at 1 day, `min-age` as `run`'s.
 
 ### T46. `dunnage watch`: optimize the artifact dirs as soon as a build or test run ends
 
@@ -181,7 +181,7 @@ while it holds the lock, runs once after it ends and not again until the next bu
 build is a no-op; a hundred units stay within the default inotify limit on Linux (lima); and the
 daemon uses the same trigger.
 
-Open for the creator: whether a unit written a moment ago may be compressed right away — `min-age`
-is an hour today so that a file the next build rewrites is not compressed for nothing; proposed
-for `watch`: the settle window (30 s) as the floor, a `--min-age` flag to raise it.
+Decided by the creator: `watch` does not wait `run`'s hour (`min-age` keeps a file the next
+build rewrites from being compressed for nothing); its floor is the settle window, 30 s, and a
+`--min-age` flag raises it.
 
