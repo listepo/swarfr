@@ -3,17 +3,18 @@
 Approved work that is not yet in `plan.md`, mostly because the cargo feature it needs is not on
 stable. Stable at the time of writing: cargo 1.97–1.98. Version gates marked *estimate* have no
 official announcement — re-check the cargo changelog before moving an item into the plan.
+Complexity is the same scale `plan.md` uses: `1` (easier) … `5` (harder).
 
-| # | Item | Cargo gate | Target dunnage version |
-| --- | --- | --- | --- |
-| R1 | Unit-level `prune` | build-dir layout v2 on stable — reported for ~1.100, to be confirmed in the changelog | 0.3 |
-| R2 | Automated shared `build-dir` for worktree families | fine-grained build locking on stable — nightly only (`-Zfine-grain-locking`), *estimate* not before 1.102 | 0.4 |
-| R3 | Symlink / shared-store mode for filesystems without reflinks | layout v2 (~1.100) and R1 | 0.5 |
-| R4 | Re-tune for `embed-metadata=no` | stabilization of `-Zembed-metadata=no` — nightly default since 2026-08, *estimate* not before 1.101 | 0.3 |
-| R5 | Retire passes that cargo takes over | cargo target / build-dir GC (rust-lang/cargo#5026) and per-user artifact cache (#5931) — no version announced | when they land |
-| R6 | Raise dedupe yield with path trimming | `trim-paths` profile option on stable — nightly only (`-Ztrim-paths`), no version announced | after it lands |
-| R7 | Publish 0.1: crates.io and a homebrew tap | none — waits for the creator's go-ahead and a license | 0.1 |
-| R8 | Embed the library in a build system | none — waits for the creator's go-ahead and a build system that wants it | after T36 |
+| # | Item | Complexity | Cargo gate | Target dunnage version |
+| --- | --- | --- | --- | --- |
+| R1 | Unit-level `prune` | 4 | build-dir layout v2 on stable — reported for ~1.100, to be confirmed in the changelog | 0.3 |
+| R2 | Automated shared `build-dir` for worktree families | 5 | fine-grained build locking on stable — nightly only (`-Zfine-grain-locking`), *estimate* not before 1.102 | 0.4 |
+| R3 | Symlink / shared-store mode for filesystems without reflinks | 5 | layout v2 (~1.100) and R1 | 0.5 |
+| R4 | Re-tune for `embed-metadata=no` | 2 | stabilization of `-Zembed-metadata=no` — nightly default since 2026-08, *estimate* not before 1.101 | 0.3 |
+| R5 | Retire passes that cargo takes over | 3 | cargo target / build-dir GC (rust-lang/cargo#5026) and per-user artifact cache (#5931) — no version announced | when they land |
+| R6 | Raise dedupe yield with path trimming | 2 | `trim-paths` profile option on stable — nightly only (`-Ztrim-paths`), no version announced | after it lands |
+| R7 | Publish 0.1: crates.io and a homebrew tap | 2 | none — waits for the creator's go-ahead and a license | 0.1 |
+| R8 | Embed the library in a build system | 5 | none — waits for the creator's go-ahead and a build system that wants it | after T36 |
 
 ### R1. Unit-level `prune`
 
