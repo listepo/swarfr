@@ -137,6 +137,8 @@ What it runs, in the pipeline order of `run`, over the roots (or the config's `r
   temp dir;
 - `evict` and `incremental` for profile dirs idle past a threshold, so the profile the tests
   just used stays whole and the next incremental build is not slowed;
+- `worktrees` (T47) at 14 idle days, every one of its keep criteria applied: abandoned git
+  worktrees go, checkout and build dirs together;
 - `compress` and `dedupe` over everything not busy, the cargo home's sources, and Go's caches
   when `go` is installed;
 - the stale `.dunnage-tmp-*` files, as every run does.
@@ -152,7 +154,8 @@ on its own with the same thresholds, `dunnage sweep` makes them, the next `cargo
 profile just tested is a no-op, and `docs/usage.md` has it under Commands and Recipes.
 
 Decided by the creator: the name `sweep`, and the default thresholds — `evict` and
-`incremental` at 7 idle days, `orphans` projects at 7, `tmpdir` at 1 day, `min-age` as `run`'s.
+`incremental` at 7 idle days, `orphans` projects at 7, `tmpdir` at 1 day, `worktrees` at 14,
+`min-age` as `run`'s. It includes `worktrees`, so T47 comes first.
 
 ### T46. `dunnage watch`: optimize the artifact dirs as soon as a build or test run ends
 
@@ -237,6 +240,7 @@ worktree when it alone fails (locked, dirty, untracked, ignored `.env`, merge in
 unpushed branch, orphan detached HEAD, young file, held by a process, a lock held, config keep,
 missing dir), and one where every criterion holds and it is removed while its branch remains.
 
-Open for the creator: the default idle days (proposed: none, the flag is required, as for
-`evict`; 14 inside `sweep`), and whether `sweep` (T45) includes this pass.
+Decided by the creator: no default for `run` — `--worktrees-idle-days` is required with
+`--lossy worktrees`, as `evict` needs its threshold; `sweep` (T45) includes the pass at 14 idle
+days.
 
