@@ -1,3 +1,5 @@
 - T24. A place where the Windows tests run
 - T21. Windows: NTFS compression and ReFS block cloning
 - T38.1. Monorepo: an owner for a build dir outside its checkout
+- T45. `dunnage sweep`: after tests or builds, remove everything that is not needed
+- T46. `dunnage watch`: optimize the artifact dirs as soon as a build or test run ends

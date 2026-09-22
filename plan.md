@@ -13,6 +13,8 @@ Design in `DESIGN.md`, measurements in `docs/research.md`.
 | T24 | todo | P1 | 3 | 0% | |
 | T21 | todo | P2 | 5 | 0% | |
 | T38.1 | todo | P2 | 3 | 0% | |
+| T45 | todo | P1 | 3 | 0% | |
+| T46 | todo | P1 | 4 | 0% | |
 
 Blockers, take these first. **T24** blocks T21: nothing on Windows can be tested without it.
 
@@ -121,3 +123,65 @@ gone, with a fixture test for both.
 build, but it is parsing cargo's output, a heuristic; (b) a record dunnage writes itself when
 `seed`/`worktree add`/the daemon sees a build dir being used from a workspace — exact, but only
 for dirs it has seen; (c) configuration: `[owners]` mapping build dirs to workspaces.
+
+### T45. `dunnage sweep`: after tests or builds, remove everything that is not needed
+
+Asked by the creator: one command to call after `cargo test` or a build — `cargo test; dunnage
+sweep` — that frees as much as it safely can, without naming each pass and its threshold.
+
+What it runs, in the pipeline order of `run`, over the roots (or the config's `roots`):
+
+- every lossy pass that removes nothing the next build needs: `orphans` (worktree gone, and a
+  project whose manifest is gone), `doc`, and `tmpdir` for what other programs left in the
+  temp dir;
+- `evict` and `incremental` for profile dirs idle past a threshold, so the profile the tests
+  just used stays whole and the next incremental build is not slowed;
+- `compress` and `dedupe` over everything not busy, the cargo home's sources, and Go's caches
+  when `go` is installed;
+- the stale `.dunnage-tmp-*` files, as every run does.
+
+Naming the command is the opt-in, as `--lossy` is for `run`: `run` with no flags stays lossless.
+It prints every removal with its reason, `--dry-run` shows the plan, `--json` reports it, and a
+busy unit is skipped with exit code 2. The thresholds have defaults, a `[sweep]` table in the
+config overrides them, and a flag overrides the config. What needs cargo's layout v2 — removing
+single stale units inside a live profile — is R1 and stays out.
+
+Done when: `dunnage sweep --dry-run` on the fixture roots lists every removal each pass would make
+on its own with the same thresholds, `dunnage sweep` makes them, the next `cargo build` of the
+profile just tested is a no-op, and `docs/usage.md` has it under Commands and Recipes.
+
+Open for the creator: the default thresholds (proposed: `evict` and `incremental` at 7 idle days,
+`orphans` projects at 7, `tmpdir` at 1 day, `min-age` as `run`'s) and the name.
+
+### T46. `dunnage watch`: optimize the artifact dirs as soon as a build or test run ends
+
+Asked by the creator: a foreground `dunnage watch [ROOT]...` that follows the build dirs under
+the roots and runs the passes after each build or test run, instead of waiting for a timer. The
+daemon (T34) looks on timers; this is the filesystem-watcher trigger `docs/architecture.md`
+reserved for it, and the daemon gets the same trigger.
+
+How it works:
+
+- A watcher (`notify`, listed in `rust.md`: FSEvents on macOS, inotify on Linux,
+  `ReadDirectoryChangesW` on Windows) on the **top level** of each known unit only — a cargo
+  profile dir, a SwiftPM `.build`, a .NET `obj` — not recursively: a handful of watches, never
+  the source tree, so inotify limits hold in a monorepo. Discovery re-runs on the `known` cadence
+  and on `--rediscover`, and the watch set follows it.
+- An event marks the unit written. It becomes due once no event has come for a settle window and
+  its guard is free: the build lock taken and dropped for cargo and SwiftPM, the quiet checks for
+  the rest. A build still running keeps it pending, as in the daemon.
+- A due unit starts one run of the same request as `run` with the same flags (or as `sweep`, with
+  `--sweep`, after T45), over all roots, since dedupe and the caps need families whole. Its own
+  writes are ignored: events inside `.dunnage-tmp-*` and the passes' renames do not re-trigger it.
+- The spinner of T44 shows what it waits for; `--json` prints one report per run; Ctrl-C stops
+  after the action in progress (`Control::stop`).
+
+Done when: on a fixture target in a temp dir, `dunnage watch` sees a `cargo build` start, waits
+while it holds the lock, runs once after it ends and not again until the next build; the next
+build is a no-op; a hundred units stay within the default inotify limit on Linux (lima); and the
+daemon uses the same trigger.
+
+Open for the creator: whether a unit written a moment ago may be compressed right away — `min-age`
+is an hour today so that a file the next build rewrites is not compressed for nothing; proposed
+for `watch`: the settle window (30 s) as the floor, a `--min-age` flag to raise it.
+
