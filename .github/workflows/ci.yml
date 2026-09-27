@@ -1,6 +1,9 @@
-# T43. The gate on every pull request, and on main after a merge. The jobs themselves live in
-# verify.yml, which the release workflows run too: a release gate narrower than the one every
-# pull request passed would let through what that one caught.
+# T43. The gate on every pull request, and on main after a merge. Rust CI comes from the shared
+# listepo/infra ci-rust.yml (pinned by commit, Rust from mise.toml with a rustc pin check):
+# fmt once, then per target clippy, check and the tests (`just check`'s steps) where the runner
+# executes the target, or a build where it does not. `cross` keeps the Windows type-check: the
+# suite runs on Windows only in a local VM (T24), so the tests do not build there.
+# verify.yml stays the release gate of bump.yml.
 name: ci
 
 on:
@@ -19,8 +22,40 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  verify:
+  rust:
     # Draft pull requests still emit `synchronize`; skip until ready_for_review.
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    uses: ./.github/workflows/verify.yml
+    uses: listepo/infra/.github/workflows/ci-rust.yml@189816ac5a375e18e0235044970efcbc40e3cabd
+    with:
+      # The shared matrix minus Windows (type-checked by `cross` below).
+      matrix: >-
+        [
+        {"os": "ubuntu-latest", "target": "x86_64-unknown-linux-gnu"},
+        {"os": "ubuntu-24.04-arm", "target": "aarch64-unknown-linux-gnu"},
+        {"os": "macos-latest", "target": "aarch64-apple-darwin"},
+        {"os": "macos-latest", "target": "x86_64-apple-darwin"}
+        ]
+      test-command: |
+        cargo check --lib --no-default-features
+        cargo test --no-fail-fast $FEATURE_ARGS
+
+  # The Windows archive is built for real only in release.yml, so the Windows backend at least
+  # has to type-check here, before a release tries to build it.
+  cross:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Into the toolchain rust-toolchain.toml pins, not the default one (see the Justfile).
+      - run: |
+          rustup target add --toolchain "$(rustc --version --verbose | sed -n 's/^release: //p')" \
+            x86_64-pc-windows-msvc
+      - run: just check-cross
