@@ -5,15 +5,15 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use dunnage::eco::cargo::incremental::{self, Incremental};
-use dunnage::eco::cargo::{CARGO, LOCK_FILE};
-use dunnage::engine::{self, Options, Report};
-use dunnage::inventory;
 use predicates::str::contains;
+use swarfr::eco::cargo::incremental::{self, Incremental};
+use swarfr::eco::cargo::{CARGO, LOCK_FILE};
+use swarfr::engine::{self, Options, Report};
+use swarfr::inventory;
 use tempfile::TempDir;
 
 mod common;
-use common::{Fixture, allocated_bytes, dunnage as dunnage_in, fake_target, run_unbusy};
+use common::{Fixture, allocated_bytes, fake_target, run_unbusy, swarfr as swarfr_in};
 
 const KIB: usize = 1024;
 const CACHE_KIB: usize = 256;
@@ -201,20 +201,20 @@ fn cli_drops_the_cache_only_when_asked_with_a_limit() {
     let (_tmp, root) = root();
     let idle = idle_target(&root, "idle", IDLE_DAYS + 1);
     let index = root.join("index.bin");
-    let dunnage = || {
-        let mut cmd = dunnage_in(&root);
+    let swarfr = || {
+        let mut cmd = swarfr_in(&root);
         cmd.args(["run", "--pass", "incremental", "--index"]);
         cmd.arg(&index);
         cmd
     };
 
-    dunnage()
+    swarfr()
         .args(["--lossy", "incremental"])
         .arg(&root)
         .assert()
         .code(EXIT_FAILURE)
         .stderr(contains("need each other"));
-    dunnage()
+    swarfr()
         .args(["--incremental-idle-days", "7"])
         .arg(&root)
         .assert()
@@ -222,7 +222,7 @@ fn cli_drops_the_cache_only_when_asked_with_a_limit() {
         .stderr(contains("need each other"));
     assert!(idle.join("incremental").exists());
 
-    dunnage()
+    swarfr()
         .args([
             "--dry-run",
             "--lossy",
@@ -237,7 +237,7 @@ fn cli_drops_the_cache_only_when_asked_with_a_limit() {
         .stdout(contains("no build for 8 days"));
     assert!(idle.join("incremental").exists());
 
-    dunnage()
+    swarfr()
         .args(["--lossy", "incremental", "--incremental-idle-days", "7"])
         .arg(&root)
         .assert()

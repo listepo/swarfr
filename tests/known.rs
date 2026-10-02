@@ -5,8 +5,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use dunnage::known;
-use dunnage::session::{Control, Request, RunReport, Session, Settings};
+use swarfr::known;
+use swarfr::session::{Control, Request, RunReport, Session, Settings};
 use tempfile::TempDir;
 
 mod common;

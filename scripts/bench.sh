@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Benchmark dunnage on a copy of a real workspace: build time before and after the passes,
+# Benchmark swarfr on a copy of a real workspace: build time before and after the passes,
 # target size, the tool's own runtime, and whether cargo rebuilds anything afterwards.
 #
 #   scripts/bench.sh <path-to-git-workspace> [work-dir]
@@ -10,14 +10,14 @@
 set -euo pipefail
 
 SRC=${1:?usage: bench.sh <path-to-git-workspace> [work-dir]}
-WORK=${2:-${TMPDIR:-/tmp}/dunnage-bench}
+WORK=${2:-${TMPDIR:-/tmp}/swarfr-bench}
 RUNS=${RUNS:-5}
 MIN_FREE_GIB=${MIN_FREE_GIB:-30}
 # Everything just built is younger than the default age floor, so a benchmark has to lift it.
-DUNNAGE_ARGS=(--min-age 0)
+SWARFR_ARGS=(--min-age 0)
 
 SRC=$(cd "$SRC" && pwd)
-DUNNAGE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+SWARFR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 case $WORK in
     /tmp/* | /private/tmp/* | /var/folders/*) ;;
     *) echo "work dir must live in a temp dir, got $WORK" >&2; exit 1 ;;
@@ -60,10 +60,10 @@ git clone --quiet --depth 1 "file://$SRC" "$WORK/a"
 git -C "$WORK/a" worktree add --quiet --detach "$WORK/b" HEAD
 CRATE=$(basename "$SRC")
 
-say "build dunnage"
-cargo build --quiet --release --manifest-path "$DUNNAGE_DIR/Cargo.toml"
-DUNNAGE=$DUNNAGE_DIR/target/release/dunnage
-dunnage() { "$DUNNAGE" "$@"; }
+say "build swarfr"
+cargo build --quiet --release --manifest-path "$SWARFR_DIR/Cargo.toml"
+SWARFR=$SWARFR_DIR/target/release/swarfr
+swarfr() { "$SWARFR" "$@"; }
 
 say "fetch dependencies once, then build offline"
 cargo fetch --quiet --manifest-path "$WORK/a/Cargo.toml"
@@ -99,7 +99,7 @@ incremental "incremental_baseline" "$WORK/a"
 
 say "what each pass would win on its own (dry run, nothing touched)"
 for pass in compress dedupe; do
-    dunnage run --dry-run --pass "$pass" "${DUNNAGE_ARGS[@]}" --index "$INDEX" "$WORK" \
+    swarfr run --dry-run --pass "$pass" "${SWARFR_ARGS[@]}" --index "$INDEX" "$WORK" \
         >"$WORK/dry_$pass.log" 2>&1
     record "dry_planned_bytes_$pass" \
         "$(awk -F'[(),]' "/  $pass: planned/ {sum += \$2} END {print sum + 0}" "$WORK/dry_$pass.log")"
@@ -120,14 +120,14 @@ sizes() {
 for pass in compress dedupe; do
     say "apply $pass"
     sizes before "$pass"
-    timed "tool_secs_$pass" dunnage run --pass "$pass" "${DUNNAGE_ARGS[@]}" --index "$INDEX" "$WORK"
+    timed "tool_secs_$pass" swarfr run --pass "$pass" "${SWARFR_ARGS[@]}" --index "$INDEX" "$WORK"
     sizes after "$pass"
     record "stale_units_after_$pass" "$(stale_units "$WORK/a")"
     if [ "$pass" = dedupe ]; then
         # Both passes have run and nothing has been rebuilt since, so a second run must find
         # almost nothing left to do.
         say "second run: the passes must find almost nothing left"
-        timed "tool_secs_second_run" dunnage run "${DUNNAGE_ARGS[@]}" --index "$INDEX" "$WORK"
+        timed "tool_secs_second_run" swarfr run "${SWARFR_ARGS[@]}" --index "$INDEX" "$WORK"
         record "second_run_applied" \
             "$(awk '/planned/ {for (i = 1; i < NF; i++) if ($i == "applied") sum += $(i + 1)}
                 END {print sum + 0}' "$WORK/tool_secs_second_run.log")"
@@ -143,10 +143,10 @@ if [ "${WITH_ACROSS:-1}" = 1 ]; then
     timed "build_clean_d" build "$WORK/d"
     record "size_after_build_kib_d" "$(size_kib "$WORK/d/target")"
     # Its own family first, so what is left is only what the other family holds.
-    dunnage run --pass dedupe "${DUNNAGE_ARGS[@]}" --index "$INDEX" "$WORK/d" \
+    swarfr run --pass dedupe "${SWARFR_ARGS[@]}" --index "$INDEX" "$WORK/d" \
         >"$WORK/dedupe_d.log" 2>&1
     record "free_before_across_kib" "$(df -k "$WORK" | awk 'NR==2 {print $4}')"
-    timed "tool_secs_across" dunnage run --pass dedupe --across-families "${DUNNAGE_ARGS[@]}" \
+    timed "tool_secs_across" swarfr run --pass dedupe --across-families "${SWARFR_ARGS[@]}" \
         --index "$INDEX" "$WORK"
     record "free_after_across_kib" "$(df -k "$WORK" | awk 'NR==2 {print $4}')"
     record "stale_units_after_across_a" "$(stale_units "$WORK/a")"

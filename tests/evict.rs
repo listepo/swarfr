@@ -4,15 +4,15 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use dunnage::eco::cargo::{CARGO, LOCK_FILE};
-use dunnage::engine::{self, Options, Report};
-use dunnage::evict::{self, Evict, Limits};
-use dunnage::inventory;
 use predicates::str::contains;
+use swarfr::eco::cargo::{CARGO, LOCK_FILE};
+use swarfr::engine::{self, Options, Report};
+use swarfr::evict::{self, Evict, Limits};
+use swarfr::inventory;
 use tempfile::TempDir;
 
 mod common;
-use common::{dunnage as dunnage_in, fake_target, run_unbusy};
+use common::{fake_target, run_unbusy, swarfr as swarfr_in};
 
 const IDLE_DAYS: u64 = 14;
 const KIB: usize = 1024;
@@ -157,16 +157,16 @@ fn cli_evicts_only_when_asked_with_a_limit() {
     let (_tmp, root) = root();
     let old = fake_target(&root, "old", 64, IDLE_DAYS + 1);
     let index = root.join("index.bin");
-    let dunnage = || dunnage_in(&root);
+    let swarfr = || swarfr_in(&root);
 
-    dunnage()
+    swarfr()
         .args(["run", "--lossy", "evict", "--index"])
         .arg(&index)
         .arg(&root)
         .assert()
         .code(EXIT_FAILURE)
         .stderr(contains("need each other"));
-    dunnage()
+    swarfr()
         .args(["run", "--evict-idle-days", "14", "--index"])
         .arg(&index)
         .arg(&root)
@@ -175,7 +175,7 @@ fn cli_evicts_only_when_asked_with_a_limit() {
         .stderr(contains("need each other"));
     assert!(old.exists());
 
-    dunnage()
+    swarfr()
         .args([
             "run",
             "--dry-run",
@@ -193,7 +193,7 @@ fn cli_evicts_only_when_asked_with_a_limit() {
         .stdout(contains("idle for 15 days"));
     assert!(old.exists());
 
-    dunnage()
+    swarfr()
         .args([
             "run",
             "--lossy",

@@ -1,4 +1,4 @@
-# Releasing dunnage
+# Releasing swarfr
 
 The pipeline is rtok's (T43): [cargo-dist](https://github.com/axodotdev/cargo-dist) builds,
 signs, tags and publishes; [release-plz](https://release-plz.dev) and a **Bump and release**
@@ -43,11 +43,11 @@ means no dispatch, no tag and nothing on the releases page. The gate cannot live
 
 | Target | Archive |
 | --- | --- |
-| `aarch64-apple-darwin` | `dunnage-aarch64-apple-darwin.tar.xz`, signed |
-| `x86_64-unknown-linux-gnu` | `dunnage-x86_64-unknown-linux-gnu.tar.xz` |
-| `x86_64-pc-windows-msvc` | `dunnage-x86_64-pc-windows-msvc.zip` |
+| `aarch64-apple-darwin` | `swarfr-aarch64-apple-darwin.tar.xz`, signed |
+| `x86_64-unknown-linux-gnu` | `swarfr-x86_64-unknown-linux-gnu.tar.xz` |
+| `x86_64-pc-windows-msvc` | `swarfr-x86_64-pc-windows-msvc.zip` |
 
-Plus `dunnage-installer.sh`, a `dunnage-<target>-update` self-updater per target, `dunnage.rb`
+Plus `swarfr-installer.sh`, a `swarfr-<target>-update` self-updater per target, `swarfr.rb`
 (a Homebrew formula), `source.tar.gz` and `sha256` sums. The release notes end with a
 **Download sizes** table. Intel macOS is left out, as in rtok: its runners queue and would set
 the release wall-clock.
@@ -84,24 +84,24 @@ exports it for `dist build`. A missing `MACOS_*` secret fails the macOS job — 
 release is refused. Set them from a machine that has the certificate:
 
 ```bash
-base64 -i DeveloperID.p12 | gh secret set MACOS_CERTIFICATE -R listepo/dunnage
+base64 -i DeveloperID.p12 | gh secret set MACOS_CERTIFICATE -R listepo/swarfr
 ```
 
 ```bash
-gh secret set MACOS_CERTIFICATE_PWD -R listepo/dunnage
+gh secret set MACOS_CERTIFICATE_PWD -R listepo/swarfr
 ```
 
 ```bash
-gh secret set RELEASE_PLZ_TOKEN -R listepo/dunnage
+gh secret set RELEASE_PLZ_TOKEN -R listepo/swarfr
 ```
 
 Notarisation is off, as in rtok; its `docs/release.md` has the notarytool workflow if that
-changes. Signing already covers the installer and `dunnage-update`, which do not set the
+changes. Signing already covers the installer and `swarfr-update`, which do not set the
 quarantine attribute; notarisation would add the archive downloaded in a browser.
 
 ## Homebrew
 
-dist builds `dunnage.rb` as a release asset (`installers` includes `homebrew`, `tap =
+dist builds `swarfr.rb` as a release asset (`installers` includes `homebrew`, `tap =
 "listepo/homebrew-tap"`) and does **not** push it: `publish-jobs` stays without `"homebrew"`, so
 there is no `HOMEBREW_TAP_TOKEN` here. Pulling the formula into
 [`listepo/homebrew-tap`](https://github.com/listepo/homebrew-tap) the way its `sync-rtok.yml`
@@ -109,7 +109,7 @@ does for rtok is R7 in `roadmap.md`, with crates.io.
 
 ## ketch
 
-[`ketch.toml`](../ketch.toml) is dunnage's ketch manifest, as rtok has one: it names the dist
+[`ketch.toml`](../ketch.toml) is swarfr's ketch manifest, as rtok has one: it names the dist
 archive for each host outright and excludes the updater and the source tarball, so `ketch
-install listepo/dunnage` cannot pick either. `ketch registry push` sends it to the registry;
-`ketch registry validate` on a directory holding `dunnage/ketch.toml` checks it first.
+install listepo/swarfr` cannot pick either. `ketch registry push` sends it to the registry;
+`ketch registry validate` on a directory holding `swarfr/ketch.toml` checks it first.

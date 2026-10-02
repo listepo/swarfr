@@ -5,7 +5,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use common::{Fixture, dunnage, ino};
+use common::{Fixture, ino, swarfr};
 
 mod common;
 
@@ -32,7 +32,7 @@ fn shared(fixture: &Fixture) -> PathBuf {
 fn run(tmp: &Path, roots: [&Fixture; 2], extra: &[&str]) -> assert_cmd::Command {
     let config_home = tmp.join("config-home");
     fs::create_dir_all(&config_home).unwrap();
-    let mut cmd = dunnage(&config_home);
+    let mut cmd = swarfr(&config_home);
     cmd.args(["run", "--pass", "dedupe", "--min-age", "0", "--index"])
         .arg(tmp.join("index.bin"))
         .args(extra)

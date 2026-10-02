@@ -1,16 +1,16 @@
-//! `dunnage daemon`, through the binary, on fixture targets. `daemon install` is only ever
+//! `swarfr daemon`, through the binary, on fixture targets. `daemon install` is only ever
 //! printed here: written, it would start a real agent on the machine running the tests.
 
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
-use dunnage::session::LOSSY_PASSES;
 use serde_json::Value;
+use swarfr::session::LOSSY_PASSES;
 use tempfile::TempDir;
 
 mod common;
-use common::{dunnage, fake_target, filesystem_can};
+use common::{fake_target, filesystem_can, swarfr};
 
 const KIB: usize = 64;
 const DAYS: u64 = 2;
@@ -55,7 +55,7 @@ fn fixture() -> Fixture {
 impl Fixture {
     /// `daemon run --once`; its stderr.
     fn once(&self) -> String {
-        let out = dunnage(&self.home)
+        let out = swarfr(&self.home)
             .env("HOME", &self.home)
             .args(["daemon", "run", "--once", "--config"])
             .arg(&self.config)
@@ -209,7 +209,7 @@ fn no_lossy_pass_runs_unless_the_config_enables_it() {
 fn a_config_without_roots_is_refused() {
     let fx = fixture();
     fs::write(&fx.config, "").unwrap();
-    dunnage(&fx.home)
+    swarfr(&fx.home)
         .env("HOME", &fx.home)
         .args(["daemon", "run", "--once", "--config"])
         .arg(&fx.config)
@@ -224,7 +224,7 @@ fn a_config_without_roots_is_refused() {
 fn status_reads_the_state_file() {
     let fx = fixture();
     let status = || {
-        dunnage(&fx.home)
+        swarfr(&fx.home)
             .env("HOME", &fx.home)
             .args(["daemon", "status", "--index"])
             .arg(&fx.index)
@@ -243,7 +243,7 @@ fn status_reads_the_state_file() {
 #[test]
 fn install_prints_a_unit_that_runs_this_binary() {
     let fx = fixture();
-    let out = dunnage(&fx.home)
+    let out = swarfr(&fx.home)
         .env("HOME", &fx.home)
         .args(["daemon", "install", "--print", "--config"])
         .arg(&fx.config)
@@ -255,7 +255,7 @@ fn install_prints_a_unit_that_runs_this_binary() {
     }
     let unit = String::from_utf8_lossy(&out.stdout);
     assert!(out.status.success(), "{unit}");
-    assert!(unit.contains(env!("CARGO_BIN_EXE_dunnage")), "{unit}");
+    assert!(unit.contains(env!("CARGO_BIN_EXE_swarfr")), "{unit}");
     assert!(unit.contains(fx.config.to_str().unwrap()), "{unit}");
     // Printed only: nothing written under HOME.
     assert_eq!(fs::read_dir(&fx.home).unwrap().count(), 0);

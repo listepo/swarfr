@@ -1,7 +1,7 @@
 # T43. The one definition of the gate: `ci.yml` runs it on every pull request, and the two
 # workflows that dispatch `release.yml` (`bump.yml`, `release-plz.yml`) run it once more on the
 # commit a release is cut from. A release is the one build nobody can re-run for themselves: a
-# broken binary on the releases page is installed before anyone notices, and `dunnage-update`
+# broken binary on the releases page is installed before anyone notices, and `swarfr-update`
 # hands it to everyone already running an older copy.
 #
 # It cannot live inside `release.yml`: dist creates the tag and a draft Release in its `plan` job

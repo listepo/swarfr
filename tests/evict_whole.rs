@@ -8,7 +8,7 @@ use predicates::str::contains;
 use tempfile::TempDir;
 
 mod common;
-use common::{dunnage, fake_profile, fake_target};
+use common::{fake_profile, fake_target, swarfr};
 
 const IDLE_DAYS: u64 = 7;
 
@@ -38,7 +38,7 @@ fn home(root: &Path) -> PathBuf {
 }
 
 fn evict(root: &Path, extra: &[&str]) -> assert_cmd::Command {
-    let mut cmd = dunnage(&home(root));
+    let mut cmd = swarfr(&home(root));
     cmd.args(["run", "--lossy", "evict", "--evict-idle-days"])
         .arg(IDLE_DAYS.to_string())
         .args(extra)
@@ -114,9 +114,9 @@ fn the_config_file_can_ask_for_it_too() {
     let (_tmp, root) = root();
     let target = two_profiles(&root, "p");
     let home = home(&root);
-    fs::create_dir_all(home.join("dunnage")).unwrap();
+    fs::create_dir_all(home.join("swarfr")).unwrap();
     fs::write(
-        home.join("dunnage/config.toml"),
+        home.join("swarfr/config.toml"),
         format!(
             "roots = [\"{}\"]\nlossy = [\"evict\"]\n\
              [evict]\nidle-days = {IDLE_DAYS}\nwhole-target = true\n",
@@ -125,7 +125,7 @@ fn the_config_file_can_ask_for_it_too() {
     )
     .unwrap();
 
-    dunnage(&home)
+    swarfr(&home)
         .args(["run", "--index"])
         .arg(root.join("index.bin"))
         .assert()

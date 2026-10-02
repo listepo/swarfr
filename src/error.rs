@@ -45,7 +45,7 @@ impl fmt::Display for Error {
             Self::Config { path, .. } => write!(f, "in {}", path.display()),
             Self::Invalid(message) => f.write_str(message),
             Self::RunLockHeld(lock) => {
-                write!(f, "another run of dunnage holds {}", lock.display())
+                write!(f, "another run of swarfr holds {}", lock.display())
             }
         }?;
         if f.alternate() {

@@ -4,7 +4,7 @@ Approved work that is not yet in `plan.md`, mostly because the cargo feature it 
 stable. Stable at the time of writing: cargo 1.97–1.98. Version gates marked *estimate* have no
 official announcement — re-check the cargo changelog before moving an item into the plan.
 
-| # | Item | Cargo gate | Target dunnage version |
+| # | Item | Cargo gate | Target swarfr version |
 | --- | --- | --- | --- |
 | R1 | Unit-level `prune` | build-dir layout v2 on stable — reported for ~1.100, to be confirmed in the changelog | 0.3 |
 | R2 | Automated shared `build-dir` for worktree families | fine-grained build locking on stable — nightly only (`-Zfine-grain-locking`), *estimate* not before 1.102 | 0.4 |
@@ -25,7 +25,7 @@ no file-name parsing. Waits for layout v2 because the v1 layout mixes all units 
 ### R2. Automated shared `build-dir` for worktree families
 
 Today `advise` only suggests it, because one build lock serializes parallel agents. Once locking is
-per unit, `dunnage` can write the family's `build.build-dir` config and garbage-collect the
+per unit, `swarfr` can write the family's `build.build-dir` config and garbage-collect the
 workspace-member units that removed worktrees leave behind (needs R1).
 
 ### R3. Symlink / shared-store mode
@@ -59,15 +59,15 @@ differing rlibs.
 
 Was T27; the creator's answer was "not yet", so it waits here instead of sitting in the plan.
 GitHub releases with binaries, the shell installer and a formula asset split off into T43; what
-stays here is crates.io and a `sync-dunnage.yml` in `listepo/homebrew-tap` that opens a pull
-request with the `dunnage.rb` asset, as `sync-rtok.yml` does.
+stays here is crates.io and a `sync-swarfr.yml` in `listepo/homebrew-tap` that opens a pull
+request with the `swarfr.rb` asset, as `sync-rtok.yml` does.
 
 `docs/usage.md` opens with "not on crates.io yet, clone and build". Before it can be:
 `Cargo.toml` has no `license` and the repository no `LICENSE` file — the creator picks one;
 `publish = false` goes; `repository`, `readme`, `keywords`, `categories` are filled in;
 `cargo publish --dry-run` is clean. The tap formula builds from the tagged source. Publishing is
 outward-facing and cannot be undone: the agent prepares everything and the creator runs, or
-explicitly orders, the `cargo publish` and the tag. Done: `cargo install dunnage` works and
+explicitly orders, the `cargo publish` and the tag. Done: `cargo install swarfr` works and
 the install section of `docs/usage.md` and `README.md` says so.
 
 ### R8. Embed the library in a build system

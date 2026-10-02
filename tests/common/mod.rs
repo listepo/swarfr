@@ -10,9 +10,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime};
 
-use dunnage::eco::cargo::{CARGO, LOCK_FILE};
-use dunnage::engine::Report;
-use dunnage::model;
+use swarfr::eco::cargo::{CARGO, LOCK_FILE};
+use swarfr::engine::Report;
+use swarfr::model;
 use tempfile::TempDir;
 
 const CARGO_TAG: &str = "Signature: 8a477f597d28d172789f06886806bc55\n\
@@ -23,7 +23,7 @@ const KIB: usize = 1024;
 pub const POLL: Duration = Duration::from_millis(20);
 const LOCK_RACE_TIMEOUT: Duration = Duration::from_secs(2);
 /// Read by the fixture's build script and not declared to cargo, so it never makes a unit stale.
-pub const BUILD_SLEEP_ENV: &str = "DUNNAGE_FIXTURE_BUILD_SLEEP_SECS";
+pub const BUILD_SLEEP_ENV: &str = "SWARFR_FIXTURE_BUILD_SLEEP_SECS";
 /// Name of the fixture's binary inside a profile dir.
 pub const BIN: &str = "fx";
 
@@ -39,9 +39,9 @@ pub const BIN: &str = "fx";
 /// if !common::filesystem_can(|caps| caps.clone, "dedupe") { return; }
 /// ```
 #[must_use]
-pub fn filesystem_can(has: fn(&dunnage::sys::Caps) -> bool, what: &str) -> bool {
+pub fn filesystem_can(has: fn(&swarfr::sys::Caps) -> bool, what: &str) -> bool {
     let dir = std::env::temp_dir();
-    if has(&dunnage::sys::caps(&dir)) {
+    if has(&swarfr::sys::caps(&dir)) {
         return true;
     }
     eprintln!(
@@ -67,7 +67,7 @@ const FILES: &[(&str, &str)] = &[
         "use std::{env, fs, path::Path, thread, time::Duration};\n\
          fn main() {\n\
              println!(\"cargo::rerun-if-changed=build.rs\");\n\
-             if let Ok(secs) = env::var(\"DUNNAGE_FIXTURE_BUILD_SLEEP_SECS\") {\n\
+             if let Ok(secs) = env::var(\"SWARFR_FIXTURE_BUILD_SLEEP_SECS\") {\n\
                  thread::sleep(Duration::from_secs(secs.parse().unwrap()));\n\
              }\n\
              let out = Path::new(&env::var(\"OUT_DIR\").unwrap()).join(\"generated.rs\");\n\
@@ -203,8 +203,8 @@ pub fn stale_units_at(ws: &Path, target: &Path) -> Vec<String> {
 
 /// The binary under test, with a config home of its own: a test must never read, or depend on,
 /// the configuration of the machine it runs on.
-pub fn dunnage(config_home: &Path) -> assert_cmd::Command {
-    let mut cmd = assert_cmd::Command::new(env!("CARGO_BIN_EXE_dunnage"));
+pub fn swarfr(config_home: &Path) -> assert_cmd::Command {
+    let mut cmd = assert_cmd::Command::new(env!("CARGO_BIN_EXE_swarfr"));
     cmd.env("XDG_CONFIG_HOME", config_home);
     cmd
 }
@@ -274,12 +274,7 @@ pub fn fake_profile(target: &Path, name: &str, kib: usize, days: u64) -> PathBuf
 pub fn git(dir: &Path, args: &[&str]) {
     let status = Command::new("git")
         .current_dir(dir)
-        .args([
-            "-c",
-            "user.name=dunnage",
-            "-c",
-            "user.email=dunnage@invalid",
-        ])
+        .args(["-c", "user.name=swarfr", "-c", "user.email=swarfr@invalid"])
         .args(args)
         .stdout(Stdio::null())
         .stderr(Stdio::null())

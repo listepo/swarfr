@@ -9,17 +9,17 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{Duration, SystemTime};
 
-use dunnage::compress::Compress;
-use dunnage::eco::Ecosystem;
-use dunnage::eco::go::{self, MOD_CACHE};
-use dunnage::eco::store::STORE;
-use dunnage::engine::{self, Options, Skip};
-use dunnage::index::HashIndex;
+use swarfr::compress::Compress;
+use swarfr::eco::Ecosystem;
+use swarfr::eco::go::{self, MOD_CACHE};
+use swarfr::eco::store::STORE;
+use swarfr::engine::{self, Options, Skip};
+use swarfr::index::HashIndex;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 
 mod common;
-use common::{allocated_bytes, dunnage};
+use common::{allocated_bytes, swarfr};
 
 /// Old enough for every floor: the immutable hour and compress's own default.
 const TWO_DAYS: Duration = Duration::from_secs(2 * 24 * 60 * 60);
@@ -121,7 +121,7 @@ fn compress_lifts_each_read_only_dir_for_a_moment_and_changes_nothing_else() {
     // Modes of every file and dir, bytes and mtimes of every file: as they were. No temp copy
     // is left, since the listing would have it.
     assert_eq!(entries(&root), before);
-    if dunnage::sys::ALLOCATED_SHOWS_COMPRESSION {
+    if swarfr::sys::ALLOCATED_SHOWS_COMPRESSION {
         assert!(allocated_bytes(&root) < bytes_before / 2);
     }
 }
@@ -254,7 +254,7 @@ fn run_go_compresses_the_module_cache_and_go_still_verifies_it() {
     age_and_seal(&module, TWO_DAYS);
     let before = entries(&module);
 
-    let out = dunnage(&root.join("config-home"))
+    let out = swarfr(&root.join("config-home"))
         .args(["run", "--json", "--go", "--index"])
         .arg(root.join("index.bin"))
         .envs(go_env(&root))

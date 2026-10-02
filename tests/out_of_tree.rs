@@ -4,12 +4,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use dunnage::inventory::{self, Target};
 use predicates::str::contains;
+use swarfr::inventory::{self, Target};
 use tempfile::TempDir;
 
 mod common;
-use common::{cargo_at, dunnage, git};
+use common::{cargo_at, git, swarfr};
 
 /// A workspace with a member in a subdir and a path dependency outside it, the files whose paths
 /// rustc gets relative and absolute.
@@ -114,7 +114,7 @@ fn a_removed_worktree_loses_its_out_of_tree_target_and_nothing_else() {
     assert!(find(&inventory, &in_wt).orphaned);
     assert!(!find(&inventory, &in_repo).orphaned);
 
-    dunnage(&root)
+    swarfr(&root)
         .args(["run", "--pass", "orphans", "--lossy", "orphans", "--index"])
         .arg(root.join("index.bin"))
         .arg(&root)

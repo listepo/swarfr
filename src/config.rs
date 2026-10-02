@@ -1,4 +1,4 @@
-//! `~/.config/dunnage/config.toml`: what `run` does when no flags say otherwise. Every key is
+//! `~/.config/swarfr/config.toml`: what `run` does when no flags say otherwise. Every key is
 //! optional, unknown keys are an error (a typo that silently does nothing is worse than a stop),
 //! and a flag always wins over the file.
 
@@ -12,7 +12,7 @@ use serde::Deserialize;
 use crate::error::{Error, Result};
 
 /// Under `$XDG_CONFIG_HOME`, or `$HOME/.config` when that is not set.
-const RELATIVE: &str = "dunnage/config.toml";
+const RELATIVE: &str = "swarfr/config.toml";
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
@@ -90,7 +90,7 @@ pub struct Discovery {
     pub every_secs: Option<u64>,
 }
 
-/// `[daemon]`: how often `dunnage daemon run` looks, and how long it may keep a build waiting.
+/// `[daemon]`: how often `swarfr daemon run` looks, and how long it may keep a build waiting.
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Daemon {
@@ -138,7 +138,7 @@ impl Config {
     }
 }
 
-/// `$XDG_CONFIG_HOME/dunnage/config.toml`, else `$HOME/.config/dunnage/config.toml`.
+/// `$XDG_CONFIG_HOME/swarfr/config.toml`, else `$HOME/.config/swarfr/config.toml`.
 pub fn default_path() -> Option<PathBuf> {
     let base = match std::env::var_os("XDG_CONFIG_HOME") {
         Some(xdg) if !xdg.is_empty() => PathBuf::from(xdg),

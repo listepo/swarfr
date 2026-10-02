@@ -333,26 +333,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
-name = "dunnage"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "applesauce",
- "assert_cmd",
- "clap",
- "predicates",
- "rayon",
- "rustix",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "toml",
- "trycmd",
- "walkdir",
-]
-
-[[package]]
 name = "either"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -888,6 +868,26 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "swarfr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "applesauce",
+ "assert_cmd",
+ "clap",
+ "predicates",
+ "rayon",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "toml",
+ "trycmd",
+ "walkdir",
+]
 
 [[package]]
 name = "syn"

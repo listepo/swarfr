@@ -10,7 +10,7 @@ use predicates::str::contains;
 use tempfile::TempDir;
 
 mod common;
-use common::{allocated_bytes, dunnage};
+use common::{allocated_bytes, swarfr};
 
 const EXIT_BUSY: i32 = 2;
 /// Above the compress pass's floor, and text enough to compress well.
@@ -62,7 +62,7 @@ fn contents(dir: &Path) -> BTreeMap<PathBuf, (Vec<u8>, SystemTime)> {
 fn run(home: &Path, extra: &[&str]) -> assert_cmd::Command {
     let config_home = home.parent().unwrap().join("config-home");
     fs::create_dir_all(&config_home).unwrap();
-    let mut cmd = dunnage(&config_home);
+    let mut cmd = swarfr(&config_home);
     cmd.args(["run", "--cargo-home"])
         .arg(home)
         .args(extra)
@@ -79,7 +79,7 @@ fn compressed_files(dir: &Path) -> usize {
         .filter(|entry| entry.file_type().is_file())
         .filter(|entry| {
             entry.metadata().is_ok_and(|meta| {
-                dunnage::sys::flags(entry.path(), &meta) & dunnage::sys::COMPRESSED != 0
+                swarfr::sys::flags(entry.path(), &meta) & swarfr::sys::COMPRESSED != 0
             })
         })
         .count()
@@ -100,7 +100,7 @@ fn ab_only_the_named_home_is_compressed_and_nothing_in_it_changes() {
     // The control still has to be a run: same flags, no `--cargo-home`.
     let config_home = control.parent().unwrap().join("config-home");
     fs::create_dir_all(&config_home).unwrap();
-    dunnage(&config_home)
+    swarfr(&config_home)
         .args(["run", "--min-age", "0", "--index"])
         .arg(control.parent().unwrap().join("index.bin"))
         .arg(&control)
@@ -112,7 +112,7 @@ fn ab_only_the_named_home_is_compressed_and_nothing_in_it_changes() {
     // btrfs compresses and still reports the uncompressed size in `st_blocks`, so on a
     // filesystem like that the win is real and the number cannot show it. What is observable
     // everywhere is the flag: the sources came back compressed.
-    if dunnage::sys::ALLOCATED_SHOWS_COMPRESSION {
+    if swarfr::sys::ALLOCATED_SHOWS_COMPRESSION {
         assert!(
             sources(&treatment) < sources(&control),
             "{} vs {}",
@@ -204,7 +204,7 @@ fn status_measures_the_home_only_when_asked() {
     let config_home = home.parent().unwrap().join("config-home");
     fs::create_dir_all(&config_home).unwrap();
 
-    let out = dunnage(&config_home)
+    let out = swarfr(&config_home)
         .args(["status", "--json", "--cargo-home"])
         .arg(&home)
         .arg(&home)
@@ -217,7 +217,7 @@ fn status_measures_the_home_only_when_asked() {
     assert_eq!(stats["home"], home.to_str().unwrap());
     assert!(stats["allocated_bytes"].as_u64().unwrap() > 0);
     let compressible = stats["compressible_bytes"].as_u64().unwrap();
-    if dunnage::sys::caps(&home).compress {
+    if swarfr::sys::caps(&home).compress {
         assert!(compressible > 0);
     } else {
         // Nothing here is compressible if the filesystem does not compress, whatever the
@@ -225,7 +225,7 @@ fn status_measures_the_home_only_when_asked() {
         assert_eq!(compressible, 0);
     }
 
-    let plain = dunnage(&config_home)
+    let plain = swarfr(&config_home)
         .args(["status", "--json"])
         .arg(&home)
         .output()

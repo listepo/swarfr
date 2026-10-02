@@ -1,4 +1,4 @@
-//! dunnage: shrink Cargo target directories without slowing builds. See `DESIGN.md`.
+//! swarfr: shrink Cargo target directories without slowing builds. See `DESIGN.md`.
 
 pub mod compress;
 pub mod config;

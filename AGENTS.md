@@ -10,7 +10,7 @@ Notes for coding agents working in this repository.
 - If a directory above this repository contains an `AGENTS.md` or `CLAUDE.md`, follow it too. If it
   conflicts with this file, ask the creator.
 
-## What dunnage is
+## What swarfr is
 
 A cargo subcommand that shrinks live `target/` directories without slowing builds. Read
 `DESIGN.md` before touching code — the inode model, pass ordering and safety invariants there are
@@ -30,10 +30,10 @@ the contract. Measurements that justify the design are in `docs/research.md`.
 
 - `just check` — `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
   `cargo check --lib --no-default-features` (the library without the CLI), `cargo test`.
-  Run it before calling a task done. Ends with a lossless `dunnage` cleanup of `target/`
-  (`just dunnage`); a no-op when `dunnage` is not installed.
-- `cargo run -- <args>` — the binary is `dunnage`. `cargo dunnage <args>` works through a
-  `cargo-dunnage` link to it: cargo passes `dunnage` as the first argument and `main` drops it.
+  Run it before calling a task done. Ends with a lossless `swarfr` cleanup of `target/`
+  (`just swarfr`); a no-op when `swarfr` is not installed.
+- `cargo run -- <args>` — the binary is `swarfr`. `cargo swarfr <args>` works through a
+  `cargo-swarfr` link to it: cargo passes `swarfr` as the first argument and `main` drops it.
 
 ## Working agreements
 

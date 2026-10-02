@@ -1,4 +1,4 @@
-//! The service manager's unit for `dunnage daemon run`: a launchd agent on macOS, a systemd user
+//! The service manager's unit for `swarfr daemon run`: a launchd agent on macOS, a systemd user
 //! unit on Linux. Low CPU and I/O priority are set here, not in code. A Windows service waits for
 //! the Windows work (T21).
 
@@ -10,13 +10,13 @@ use std::process::Command;
 use anyhow::{Context, Result, bail, ensure};
 
 /// The launchd label, and the agent's file name.
-pub const LABEL: &str = "dev.dunnage.daemon";
+pub const LABEL: &str = "dev.swarfr.daemon";
 /// The systemd user unit.
-pub const SYSTEMD_UNIT: &str = "dunnage.service";
+pub const SYSTEMD_UNIT: &str = "swarfr.service";
 /// launchd waits this long before it starts an agent that exited again, and so does systemd.
 const RESTART_SECS: u32 = 300;
 const UNSUPPORTED: &str = "no service manager support on this platform yet: run \
-                           `dunnage daemon run` from a scheduler of your own";
+                           `swarfr daemon run` from a scheduler of your own";
 
 /// A unit file and where it goes.
 pub struct Unit {
@@ -68,7 +68,7 @@ fn unit_path() -> Result<PathBuf> {
 fn unit(program: &[String]) -> Result<Unit> {
     let path = unit_path()?;
     let text = if cfg!(target_os = "macos") {
-        launchd_plist(program, &home()?.join("Library/Logs/dunnage.log"))
+        launchd_plist(program, &home()?.join("Library/Logs/swarfr.log"))
     } else {
         systemd_unit(program)
     };
@@ -128,7 +128,7 @@ pub fn systemd_unit(program: &[String]) -> String {
     let exec: Vec<String> = program.iter().map(|arg| systemd_word(arg)).collect();
     format!(
         "[Unit]\n\
-         Description=dunnage: shrink build dirs once they have gone cold\n\
+         Description=swarfr: shrink build dirs once they have gone cold\n\
          \n\
          [Service]\n\
          ExecStart={}\n\
@@ -177,7 +177,7 @@ fn gui_domain() -> Result<String> {
     ))
 }
 
-/// `dunnage daemon install`: writes the unit and has the service manager start it. `print`
+/// `swarfr daemon install`: writes the unit and has the service manager start it. `print`
 /// only shows it.
 pub fn install(config: Option<&Path>, index: Option<&Path>, print: bool) -> Result<()> {
     let unit = unit(&program(config, index)?)?;
@@ -204,7 +204,7 @@ pub fn install(config: Option<&Path>, index: Option<&Path>, print: bool) -> Resu
     Ok(())
 }
 
-/// `dunnage daemon remove`: stops the daemon and removes the unit.
+/// `swarfr daemon remove`: stops the daemon and removes the unit.
 pub fn remove() -> Result<()> {
     let path = unit_path()?;
     if cfg!(target_os = "macos") {
@@ -235,7 +235,7 @@ pub fn print_installed() {
         println!("installed: {}", path.display());
     } else {
         println!(
-            "not installed: `dunnage daemon install` writes {}",
+            "not installed: `swarfr daemon install` writes {}",
             path.display()
         );
     }
@@ -247,7 +247,7 @@ mod tests {
 
     fn program() -> Vec<String> {
         [
-            "/opt/a & b/dunnage",
+            "/opt/a & b/swarfr",
             "daemon",
             "run",
             "--config",
@@ -259,14 +259,14 @@ mod tests {
 
     #[test]
     fn the_plist_escapes_every_argument() {
-        let plist = launchd_plist(&program(), Path::new("/l/dunnage.log"));
+        let plist = launchd_plist(&program(), Path::new("/l/swarfr.log"));
         assert!(
-            plist.contains("<string>/opt/a &amp; b/dunnage</string>"),
+            plist.contains("<string>/opt/a &amp; b/swarfr</string>"),
             "{plist}"
         );
         assert!(plist.contains("<string>/c/50%$HOME&quot;x&quot;.toml</string>"));
         assert!(plist.contains("<key>LowPriorityIO</key><true/>"));
-        assert!(plist.contains("<string>/l/dunnage.log</string>"));
+        assert!(plist.contains("<string>/l/swarfr.log</string>"));
     }
 
     #[test]
@@ -274,7 +274,7 @@ mod tests {
         let unit = systemd_unit(&program());
         assert!(
             unit.contains(
-                r#"ExecStart="/opt/a & b/dunnage" "daemon" "run" "--config" "/c/50%%$$HOME\"x\".toml""#
+                r#"ExecStart="/opt/a & b/swarfr" "daemon" "run" "--config" "/c/50%%$$HOME\"x\".toml""#
             ),
             "{unit}"
         );

@@ -8,12 +8,12 @@
 # ever read. Everything the tool touches is the clone. Results go to <work-dir>/results.tsv.
 set -euo pipefail
 
-WORK=${1:-${TMPDIR:-/tmp}/dunnage-home-bench}
+WORK=${1:-${TMPDIR:-/tmp}/swarfr-home-bench}
 # A crate to build against the cloned home; any crate already in it will do.
 CRATE=${CRATE:-libc}
 
 REAL_HOME=${CARGO_HOME:-$HOME/.cargo}
-DUNNAGE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+SWARFR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 case $WORK in
     /tmp/* | /private/tmp/* | /var/folders/*) ;;
     *) echo "work dir must live in a temp dir, got $WORK" >&2; exit 1 ;;
@@ -53,9 +53,9 @@ record "sources_before_kib" "$(size_kib "$HOME_COPY/registry/src")"
 record "checkouts_before_kib" "$([ -d "$HOME_COPY/git/checkouts" ] && size_kib "$HOME_COPY/git/checkouts" || echo 0)"
 record "cache_before_kib" "$(size_kib "$HOME_COPY/registry/cache")"
 
-say "build dunnage"
-cargo build --quiet --release --manifest-path "$DUNNAGE_DIR/Cargo.toml"
-DUNNAGE=$DUNNAGE_DIR/target/release/dunnage
+say "build swarfr"
+cargo build --quiet --release --manifest-path "$SWARFR_DIR/Cargo.toml"
+SWARFR=$SWARFR_DIR/target/release/swarfr
 
 say "a crate that uses the cloned home, built offline before the pass"
 # The newest copy of it in the clone; `tail` reads its input to the end, so no SIGPIPE.
@@ -89,7 +89,7 @@ stamp() { stat -f '%i %m %z' "$SRC_DIR/.cargo-ok"; }
 OK_BEFORE=$(stamp)
 
 say "compress the cloned home"
-timed "tool_secs" "$DUNNAGE" run --cargo-home "$HOME_COPY" --min-age 0 --index "$WORK/hashes.bin"
+timed "tool_secs" "$SWARFR" run --cargo-home "$HOME_COPY" --min-age 0 --index "$WORK/hashes.bin"
 record "sources_after_kib" "$(size_kib "$HOME_COPY/registry/src")"
 record "checkouts_after_kib" "$([ -d "$HOME_COPY/git/checkouts" ] && size_kib "$HOME_COPY/git/checkouts" || echo 0)"
 record "cache_after_kib" "$(size_kib "$HOME_COPY/registry/cache")"

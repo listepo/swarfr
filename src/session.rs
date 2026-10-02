@@ -38,7 +38,7 @@ use crate::orphans::{self, Orphan, Orphans};
 use crate::seed::{self, Seeded};
 
 /// Relative to `$HOME`. The digit follows the index file format.
-const DEFAULT_INDEX: &str = ".cache/dunnage/hashes-v1.bin";
+const DEFAULT_INDEX: &str = ".cache/swarfr/hashes-v1.bin";
 /// The run lock's file name, in the hash index's dir.
 pub const RUN_LOCK: &str = "run.lock";
 /// What a report calls the one group `across_families` makes, in place of a family dir.
@@ -55,7 +55,7 @@ pub const PASSES: [&str; 6] = [
     dedupe::NAME,
 ];
 
-/// `$HOME/.cache/dunnage/hashes-v1.bin`; `None` without a `$HOME`.
+/// `$HOME/.cache/swarfr/hashes-v1.bin`; `None` without a `$HOME`.
 pub fn default_index() -> Option<PathBuf> {
     Some(PathBuf::from(std::env::var_os("HOME")?).join(DEFAULT_INDEX))
 }

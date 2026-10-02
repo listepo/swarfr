@@ -1,4 +1,4 @@
-//! `dunnage advise`: read the files that decide how big a target grows and name what to
+//! `swarfr advise`: read the files that decide how big a target grows and name what to
 //! change. Reports only — nothing here writes, and every finding says which file and which key
 //! it is about. The numbers it quotes about the cost of each change are the measured ones in
 //! `docs/research.md`.
@@ -118,7 +118,7 @@ pub fn review(file: &Path, kind: Kind, doc: &Table, nightly: bool) -> Vec<Findin
     if incremental == Some(&Value::from(true)) {
         add(
             "build.incremental",
-            "on by default for dev profiles anyway; `dunnage run --lossy incremental` drops \
+            "on by default for dev profiles anyway; `swarfr run --lossy incremental` drops \
              the idle caches instead, at one non-incremental rebuild each"
                 .to_string(),
         );
@@ -194,7 +194,7 @@ pub fn notes(targets: &[Target]) -> Vec<Note> {
             if !built && !targets.is_empty() {
                 add(
                     checkout.display().to_string(),
-                    "a checkout with no target dir: `dunnage seed` clones a sibling's".to_string(),
+                    "a checkout with no target dir: `swarfr seed` clones a sibling's".to_string(),
                 );
             }
         }

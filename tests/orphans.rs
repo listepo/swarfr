@@ -5,15 +5,15 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::process::{Command as Process, Stdio};
 
-use dunnage::eco::cargo::{CARGO, LOCK_FILE};
-use dunnage::engine::{self, Options, Pass, Report};
-use dunnage::inventory;
-use dunnage::orphans::{self, Orphan, Orphans};
 use predicates::str::contains;
+use swarfr::eco::cargo::{CARGO, LOCK_FILE};
+use swarfr::engine::{self, Options, Pass, Report};
+use swarfr::inventory;
+use swarfr::orphans::{self, Orphan, Orphans};
 use tempfile::TempDir;
 
 mod common;
-use common::{allocated_bytes, dunnage as dunnage_in, fake_target, run_unbusy};
+use common::{allocated_bytes, fake_target, run_unbusy, swarfr as swarfr_in};
 
 const KIB: usize = 1024;
 const PROFILE_KIB: usize = 64;
@@ -27,12 +27,7 @@ fn root() -> (TempDir, PathBuf) {
 fn git(dir: &Path, args: &[&str]) {
     let status = Process::new("git")
         .current_dir(dir)
-        .args([
-            "-c",
-            "user.name=dunnage",
-            "-c",
-            "user.email=dunnage@invalid",
-        ])
+        .args(["-c", "user.name=swarfr", "-c", "user.email=swarfr@invalid"])
         .args(args)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -254,17 +249,17 @@ fn cli_removes_an_orphan_only_when_asked() {
     let (_repo, wt) = family(&root);
     orphan(&root);
     let index = root.join("index.bin");
-    let dunnage = || {
-        let mut cmd = dunnage_in(&root);
+    let swarfr = || {
+        let mut cmd = swarfr_in(&root);
         cmd.args(["run", "--pass", "orphans", "--index"]);
         cmd.arg(&index);
         cmd
     };
 
-    dunnage().arg(&root).assert().success();
+    swarfr().arg(&root).assert().success();
     assert!(wt.exists(), "a run that does not name the pass keeps it");
 
-    dunnage()
+    swarfr()
         .args(["--dry-run", "--lossy", "orphans"])
         .arg(&root)
         .assert()
@@ -273,7 +268,7 @@ fn cli_removes_an_orphan_only_when_asked() {
         .stdout(contains("worktree record"));
     assert!(wt.exists());
 
-    dunnage()
+    swarfr()
         .args(["--lossy", "orphans"])
         .arg(&root)
         .assert()
@@ -291,7 +286,7 @@ fn gone_project(root: &Path, days: u64) -> PathBuf {
 }
 
 fn cli(root: &Path) -> assert_cmd::Command {
-    let mut cmd = dunnage_in(root);
+    let mut cmd = swarfr_in(root);
     cmd.args(["run", "--pass", "orphans", "--lossy", "orphans", "--index"]);
     cmd.arg(root.join("index.bin"));
     cmd
@@ -326,7 +321,7 @@ fn a_gone_project_is_only_reported_when_recent_or_without_a_threshold() {
         .assert()
         .success()
         .stdout(contains("orphans: planned 0"));
-    dunnage_in(&root)
+    swarfr_in(&root)
         .args(["status"])
         .arg(&root)
         .assert()
@@ -377,7 +372,7 @@ fn a_manifest_back_before_the_lock_keeps_the_target() {
 #[test]
 fn the_threshold_needs_the_pass() {
     let (_tmp, root) = root();
-    dunnage_in(&root)
+    swarfr_in(&root)
         .args(["run", "--orphans-project-idle-days", "7", "--index"])
         .arg(root.join("index.bin"))
         .arg(&root)

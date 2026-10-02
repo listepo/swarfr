@@ -62,7 +62,7 @@ pub fn flags(_path: &Path, meta: &Metadata) -> u32 {
 pub fn caps(dir: &Path) -> Caps {
     super::probing_in(dir, || {
         let probe = super::probe_path(dir);
-        if fs::write(&probe, b"dunnage").is_err() {
+        if fs::write(&probe, b"swarfr").is_err() {
             return Caps::NONE;
         }
         let _ = fs::remove_file(&probe);

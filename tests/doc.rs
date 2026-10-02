@@ -6,7 +6,7 @@ use std::path::Path;
 use predicates::str::contains;
 
 mod common;
-use common::{Fixture, allocated_bytes, dunnage};
+use common::{Fixture, allocated_bytes, swarfr};
 
 const EXIT_BUSY: i32 = 2;
 
@@ -27,7 +27,7 @@ fn documented() -> Fixture {
 fn run(fixture: &Fixture, root: &Path, extra: &[&str]) -> assert_cmd::Command {
     let home = root.join("config-home");
     fs::create_dir_all(&home).unwrap();
-    let mut cmd = dunnage(&home);
+    let mut cmd = swarfr(&home);
     cmd.args(["run", "--index"])
         .arg(root.join("index.bin"))
         .args(extra)
