@@ -6,10 +6,10 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use dunnage::dedupe::{DEFAULT_MIN_SIZE, Dedupe};
-use dunnage::eco::cargo::{CARGO, LOCK_FILE};
-use dunnage::engine::{self, Options, PassReport};
-use dunnage::index::HashIndex;
+use swarfr::dedupe::{DEFAULT_MIN_SIZE, Dedupe};
+use swarfr::eco::cargo::{CARGO, LOCK_FILE};
+use swarfr::engine::{self, Options, PassReport};
+use swarfr::index::HashIndex;
 use tempfile::TempDir;
 
 mod common;

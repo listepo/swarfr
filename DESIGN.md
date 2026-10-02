@@ -1,9 +1,10 @@
-# dunnage — design
+# swarfr — design
 
-Dunnage: the loose packing stuffed around the cargo in a hold. `target/` is dunnage.
-The project was called `cargo-tare` until T42; `done.md` and `docs/spike/` keep the old name.
+Swarf: the chips and shavings left after machining — waste that is not the product. Much of
+`target/` is swarf. The project was called `cargo-tare` until T42 and `dunnage` until T46;
+`done.md` and `docs/spike/` keep the old names.
 
-`dunnage` shrinks Cargo build directories without slowing builds down, by combining several
+`swarfr` shrinks Cargo build directories without slowing builds down, by combining several
 independent approaches in one planner instead of chaining separate tools. Measurements behind
 every choice are in `docs/research.md`.
 
@@ -108,7 +109,7 @@ compressed, smaller than 8 KB, or younger than `min-age`. Backend: the `applesau
 the member's mtime / mode / flags, then `rename(2)` over each path of the member's hardlink group.
 Clones are copy-on-write, so a later in-place write by rustc cannot leak into siblings.
 
-**seed** — `dunnage seed --from <worktree> [<new-worktree>]`, or automatic source selection
+**seed** — `swarfr seed --from <worktree> [<new-worktree>]`, or automatic source selection
 inside the family (largest recently built target). Recursive clone of the target dir, excluding
 `incremental/` and lock files. Verified in T2: registry dependencies are fresh in the new
 worktree, only workspace members rebuild (their sources have new mtimes; their unit hashes are
@@ -143,7 +144,7 @@ for filesystems without reflinks.
 2. Re-check `(size, mtime)` of source and member immediately before replacing; any change aborts
    that group.
 3. Replacement is always temp-file + `rename` inside the same directory; a crash leaves either the
-   old or the new file, plus at most a `.dunnage-tmp-*` file that the next run removes.
+   old or the new file, plus at most a `.swarfr-tmp-*` file that the next run removes.
 4. mtime and mode of every replaced path are preserved. T2: a workspace-member rlib with a new
    mtime makes its dependents rebuild; registry artifacts are not mtime-checked, but the rule is
    applied to everything. BSD flags: the compressed flag follows the content (a clone of a
@@ -222,7 +223,7 @@ and messages with paths through `assert_cmd` + `predicates` in `tests/cli.rs`.
 2. **Scan.** `model::scan` turns each locked profile dir into `Inode`s: `Stamp`
    (`dev`, `ino`, `size`, `mtime`), mode, flags, link count, allocated bytes and every path found.
    Symlinks are not followed, other devices are not entered, `.cargo-lock` is left out, and
-   `.dunnage-tmp-*` leftovers are collected and removed (not on `--dry-run`).
+   `.swarfr-tmp-*` leftovers are collected and removed (not on `--dry-run`).
 3. **Plan.** Each `Pass` gets the scanned profiles and returns `Action`s without touching the
    disk. A lossy pass is asked only when named in `Options::lossy`. After a pass that applied
    anything the profiles are rescanned, so the next pass sees the new inodes.
@@ -370,7 +371,7 @@ clone is better and needs no permission.
 
 The **index** maps `(device, inode)` to `(size, mtime, hash, shared, seen)`; a lookup with a different
 size or mtime misses, so a rewritten file is rehashed and loses its shared mark. It is one flat
-file of fixed little-endian records behind a magic string (`~/.cache/dunnage/hashes-v1.bin`,
+file of fixed little-endian records behind a magic string (`~/.cache/swarfr/hashes-v1.bin`,
 `--index` to override), written through a temp file and `rename`, saved on `--dry-run` too. It is
 only a cache: a missing, truncated or foreign file reads as empty, and so does one of an older
 format (the magic's digit), which the next save replaces. `seen` is when a run last hit the
@@ -382,7 +383,7 @@ rehash of that file.
 Why the `shared` mark exists: APFS cannot be asked whether two files share blocks, and a clone is
 a different inode with equal content — without the mark every run would clone everything again
 and report savings that are not there. Known limits: two clusters shared by separate runs are not
-merged with each other; a target seeded by `cp -c` or `dunnage seed` is unknown to the index
+merged with each other; a target seeded by `cp -c` or `swarfr seed` is unknown to the index
 and is cloned once more on its first run (T8 can register seeded inodes); losing the index costs
 one full rehash and one redundant round of cloning; like cargo itself, the index trusts
 `(size, mtime)`, so a file rewritten with the same size within the same nanosecond timestamp
@@ -436,7 +437,7 @@ Not a pass: it runs on its own, before there is anything to shrink.
   positions are copied under one run lock. `worktree add` from a checkout root does the same.
 - **The copy is a clone.** `fs::copy` is `clonefile` on APFS, so the new target shares every
   block with the old one and the volume loses nothing. Dirs are recreated, symlinks are
-  recreated as symlinks, and `incremental/`, `.cargo-lock` and leftover `.dunnage-tmp-` files are
+  recreated as symlinks, and `incremental/`, `.cargo-lock` and leftover `.swarfr-tmp-` files are
   left behind: a cache of another checkout's build, a lock that is not ours, and rubbish.
 - **Under the source's locks.** Every profile dir of the source is locked with
   `ProfileLock::try_guard` on the adapter's guard for the length of the walk; one that a build holds is reported and
@@ -455,7 +456,7 @@ has no registry dependencies, which are exactly the units that keep their paths 
 worktrees, so `tests/worktree.rs` builds a repository whose one dependency is vendored outside
 it; `--from` is not checked for being in the same family.
 
-`dunnage worktree add GIT ARGS...` (`Session::worktree_add`) is `git worktree add` followed by
+`swarfr worktree add GIT ARGS...` (`Session::worktree_add`) is `git worktree add` followed by
 `seed`: it finds the new worktree by comparing `git worktree list --porcelain` before and after,
 seeds it at the path the current dir has inside its checkout, and reports git's failure without
 seeding. No built checkout to copy from is not an error: the worktree stays and nothing is
@@ -862,9 +863,9 @@ flags would, lossy passes included only when the config names them.
 
 
 ```
-dunnage status [--json] [--all] [--cargo-home [DIR]] [ROOT]...  # inventory, families, potential
+swarfr status [--json] [--all] [--cargo-home [DIR]] [ROOT]...  # inventory, families, potential
                                                           # savings; read-only
-dunnage run [--dry-run] [--lossy <PASS>]... [--index <FILE>] [<ROOT>]...
+swarfr run [--dry-run] [--lossy <PASS>]... [--index <FILE>] [<ROOT>]...
                [--config <FILE>] [--json]          # file: see below; json: the report as data
                [--cargo-home [DIR]]                # compress the registry sources too
                [--store <DIR>]... [--go]           # content-addressed stores; Go's caches
@@ -874,15 +875,15 @@ dunnage run [--dry-run] [--lossy <PASS>]... [--index <FILE>] [<ROOT>]...
                [--orphans-project-idle-days <N>]    # with --lossy orphans: projects gone
                [--pass <PASS>]... [--min-age <SECS>] [--min-size <BYTES>]  # benchmarks
                [--rediscover]                       # walk the roots even if the list holds
-dunnage seed [--from <DIR>] [--dry-run] [--index <FILE>] [<DIR>]  # clone a sibling's target
-dunnage worktree add [--dry-run] [--index <FILE>] <GIT ARGS>... # git worktree add, then seed
-dunnage advise [--json] [ROOT]...  # what makes these targets bigger than they need to be
-dunnage daemon run [--config <FILE>] [--index <FILE>] [--once]  # the passes, as dirs go cold
-dunnage daemon install [--config <FILE>] [--index <FILE>] [--print] | remove | status [--json]
+swarfr seed [--from <DIR>] [--dry-run] [--index <FILE>] [<DIR>]  # clone a sibling's target
+swarfr worktree add [--dry-run] [--index <FILE>] <GIT ARGS>... # git worktree add, then seed
+swarfr advise [--json] [ROOT]...  # what makes these targets bigger than they need to be
+swarfr daemon run [--config <FILE>] [--index <FILE>] [--once]  # the passes, as dirs go cold
+swarfr daemon install [--config <FILE>] [--index <FILE>] [--print] | remove | status [--json]
 ```
 
-Config (`src/config.rs`): `$XDG_CONFIG_HOME/dunnage/config.toml`, else
-`~/.config/dunnage/config.toml` — `roots`, `lossy`, `min-age`, `min-size`,
+Config (`src/config.rs`): `$XDG_CONFIG_HOME/swarfr/config.toml`, else
+`~/.config/swarfr/config.toml` — `roots`, `lossy`, `min-age`, `min-size`,
 `[evict] idle-days / max-total-gib / whole-target`, `[incremental] idle-days`, `[index] idle-days`, `[orphans] project-idle-days`,
 `[discovery] every-secs`, `[daemon] interval-secs / rediscover-secs / lock-budget-secs`,
 `[family."<dir>"] skip / skip-paths / ecosystems`. Keys are

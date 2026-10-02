@@ -8,13 +8,13 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime};
 
-use dunnage::compress::Compress;
-use dunnage::dedupe::Dedupe;
-use dunnage::eco::cmake::CMAKE;
-use dunnage::eco::{self, Ecosystem, Guard};
-use dunnage::engine::{self, Options};
-use dunnage::index::HashIndex;
-use dunnage::inventory;
+use swarfr::compress::Compress;
+use swarfr::dedupe::Dedupe;
+use swarfr::eco::cmake::CMAKE;
+use swarfr::eco::{self, Ecosystem, Guard};
+use swarfr::engine::{self, Options};
+use swarfr::index::HashIndex;
+use swarfr::inventory;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 
@@ -179,10 +179,10 @@ fn after_compress_and_dedupe_cmake_builds_nothing_and_the_binaries_run() {
 
     assert!(report.busy.is_empty(), "{report:?}");
     assert_eq!(report.quiet, units);
-    let caps = dunnage::sys::caps(&build);
+    let caps = swarfr::sys::caps(&build);
     if caps.compress {
         assert!(report.passes[0].applied > 0, "{report:?}");
-        if dunnage::sys::ALLOCATED_SHOWS_COMPRESSION {
+        if swarfr::sys::ALLOCATED_SHOWS_COMPRESSION {
             assert!(allocated_bytes(&build) < before, "{before}");
         }
     }

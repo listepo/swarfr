@@ -105,7 +105,7 @@ REPORT = """      - name: Report artifact sizes
             echo "| File | Size |"
             echo "|---|---:|"
             find "$root" -maxdepth 1 -type f \\( \\
-              -name '*.tar.xz' -o -name '*.zip' -o -name '*-update' -o -name 'dunnage-installer.sh' -o -name 'dunnage.rb' -o -name 'sha256.sum' -o -name 'source.tar.gz' \\
+              -name '*.tar.xz' -o -name '*.zip' -o -name '*-update' -o -name 'swarfr-installer.sh' -o -name 'swarfr.rb' -o -name 'sha256.sum' -o -name 'source.tar.gz' \\
             \\) -print0 | sort -z | while IFS= read -r -d '' f; do
               bytes=$(wc -c <"$f" | tr -d ' ')
               human=$(awk -v b="$bytes" 'BEGIN {
@@ -150,7 +150,7 @@ create_new = """          # Write and read notes from a file to avoid quoting br
             echo \"| File | Size |\"
             echo \"|---|---:|\"
             find artifacts -maxdepth 1 -type f \\( \\
-              -name '*.tar.xz' -o -name '*.zip' -o -name '*-update' -o -name 'dunnage-installer.sh' -o -name 'dunnage.rb' -o -name 'source.tar.gz' \\
+              -name '*.tar.xz' -o -name '*.zip' -o -name '*-update' -o -name 'swarfr-installer.sh' -o -name 'swarfr.rb' -o -name 'source.tar.gz' \\
             \\) -print0 | sort -z | while IFS= read -r -d '' f; do
               bytes=$(wc -c <\"$f\" | tr -d ' ')
               human=$(awk -v b=\"$bytes\" 'BEGIN {

@@ -8,13 +8,13 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime};
 
-use dunnage::compress::Compress;
-use dunnage::dedupe::Dedupe;
-use dunnage::eco::dotnet::DOTNET;
-use dunnage::eco::{self, Ecosystem, Guard};
-use dunnage::engine::{self, Options};
-use dunnage::index::HashIndex;
-use dunnage::inventory;
+use swarfr::compress::Compress;
+use swarfr::dedupe::Dedupe;
+use swarfr::eco::dotnet::DOTNET;
+use swarfr::eco::{self, Ecosystem, Guard};
+use swarfr::engine::{self, Options};
+use swarfr::index::HashIndex;
+use swarfr::inventory;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 
@@ -202,7 +202,7 @@ fn after_dedupe_and_compress_msbuild_builds_nothing_and_the_app_runs() {
 
     assert!(report.busy.is_empty(), "{report:?}");
     assert_eq!(report.quiet, units);
-    let caps = dunnage::sys::caps(&root);
+    let caps = swarfr::sys::caps(&root);
     if caps.clone {
         // `Lib.dll` in `Lib/obj`, `Lib/bin` and both apps' `bin/`: one file, four paths.
         assert!(report.passes[1].applied >= 3, "{report:?}");
@@ -210,7 +210,7 @@ fn after_dedupe_and_compress_msbuild_builds_nothing_and_the_app_runs() {
     if caps.compress {
         assert!(report.passes[0].applied > 0, "{report:?}");
     }
-    if dunnage::sys::ALLOCATED_SHOWS_COMPRESSION || caps.clone {
+    if swarfr::sys::ALLOCATED_SHOWS_COMPRESSION || caps.clone {
         assert!(allocated_bytes(&root) < before, "{before}");
     }
     // The oracle: MSBuild sees nothing to do, and what it built still runs.

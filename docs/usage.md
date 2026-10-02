@@ -1,35 +1,35 @@
-# dunnage — user guide
+# swarfr — user guide
 
 How to install the tool, what to run first, and what each command does. Why it works the way it
 does is in `DESIGN.md`; the numbers behind the defaults are in `docs/bench.md`.
 
 ## Install
 
-Every release on the [releases page](https://github.com/listepo/dunnage/releases) carries
+Every release on the [releases page](https://github.com/listepo/swarfr/releases) carries
 binaries for Apple Silicon macOS (signed), x86_64 Linux and x86_64 Windows. The shell installer
-puts `dunnage` and its updater `dunnage-update` into cargo's bin directory:
+puts `swarfr` and its updater `swarfr-update` into cargo's bin directory:
 
 ```
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/listepo/dunnage/releases/latest/download/dunnage-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/listepo/swarfr/releases/latest/download/swarfr-installer.sh | sh
 ```
 
-`dunnage-update` later fetches the newest release in place. With
-[ketch](https://github.com/listepo/ketch), `ketch install listepo/dunnage` does the same. How a release is cut is in
+`swarfr-update` later fetches the newest release in place. With
+[ketch](https://github.com/listepo/ketch), `ketch install listepo/swarfr` does the same. How a release is cut is in
 `docs/release.md`.
 
 The crate is not on crates.io yet. Or build it from a checkout, with the toolchain the repository
 pins (`rust-toolchain.toml`):
 
 ```
-git clone https://github.com/listepo/dunnage
-cargo install --locked --path dunnage
+git clone https://github.com/listepo/swarfr
+cargo install --locked --path swarfr
 ```
 
-The binary is `dunnage`; `dunnage --version` tells you it is on the `PATH`. If you prefer
-`cargo dunnage <command>`, link it once under the name cargo looks for:
+The binary is `swarfr`; `swarfr --version` tells you it is on the `PATH`. If you prefer
+`cargo swarfr <command>`, link it once under the name cargo looks for:
 
 ```
-ln -s "$(command -v dunnage)" "$(dirname "$(command -v dunnage)")/cargo-dunnage"
+ln -s "$(command -v swarfr)" "$(dirname "$(command -v swarfr)")/cargo-swarfr"
 ```
 
 What it can do depends on the filesystem under your target dirs, not on the operating system:
@@ -49,10 +49,10 @@ What it can do depends on the filesystem under your target dirs, not on the oper
 Everything here is read-only until the last step.
 
 ```
-dunnage status ~/code              # 1. what is there and what it weighs
-dunnage advise ~/code              # 2. what makes it bigger than it needs to be
-dunnage run --dry-run ~/code       # 3. what a run would do
-dunnage run ~/code                 # 4. do it
+swarfr status ~/code              # 1. what is there and what it weighs
+swarfr advise ~/code              # 2. what makes it bigger than it needs to be
+swarfr run --dry-run ~/code       # 3. what a run would do
+swarfr run ~/code                 # 4. do it
 ```
 
 1. `status` finds every cargo target dir under the root, groups them by repository (a *family*:
@@ -68,7 +68,7 @@ dunnage run ~/code                 # 4. do it
    nothing, rebuilds nothing, and can be repeated at any time; a later run is fast because
    content hashes are cached, and finds only what builds wrote since.
 
-Check the result with `dunnage status ~/code` again, and with `cargo build` in any of the
+Check the result with `swarfr status ~/code` again, and with `cargo build` in any of the
 projects: it must report nothing to recompile.
 
 ## What is safe and what deletes
@@ -111,7 +111,7 @@ busy, clones only. A build dir configured in the source tree itself (`cmake .`) 
 
 ## Commands
 
-### `dunnage status [--json] [--all] [--cargo-home [DIR]] [ROOT]...`
+### `swarfr status [--json] [--all] [--cargo-home [DIR]] [ROOT]...`
 
 Read-only inventory. `ROOT` defaults to the current directory; a target dir itself works too.
 Build dirs are grouped by family, then checkout, with a subtotal per ecosystem; each group lists
@@ -121,13 +121,13 @@ its five largest build dirs by their place in the checkout, and `--all` lists th
 as one JSON document, flat: one entry per build dir with its `ecosystem`, `checkout`, `position`
 in the checkout and `guard` (`lock`, `shared`, `quiet`, `immutable`).
 
-### `dunnage advise [--json] [ROOT]...`
+### `swarfr advise [--json] [ROOT]...`
 
 Read-only findings about manifests and cargo configs, followed by what only the inventory shows:
 the weight of `incremental/`, families that could share a `build-dir`, checkouts `seed` would
 fill, orphaned worktrees, and units built by a toolchain you no longer use.
 
-### `dunnage run [OPTIONS] [ROOT]...`
+### `swarfr run [OPTIONS] [ROOT]...`
 
 Plans and applies the passes, one family at a time. Without a `ROOT` it uses `roots` from the
 config file.
@@ -149,7 +149,7 @@ config file.
 | `--across-families` | compare targets of unrelated repositories too; holds every lock for the whole run |
 | `--link-artifacts` | **hazard**: on filesystems without clones, share build artifacts as hardlinks |
 | `--rediscover` | walk the roots for build dirs even if the last walk still holds |
-| `--index <FILE>` | content-hash cache; default `~/.cache/dunnage/hashes-v1.bin` |
+| `--index <FILE>` | content-hash cache; default `~/.cache/swarfr/hashes-v1.bin` |
 | `--config <FILE>` | another config file; it must exist |
 | `--json` | the report as JSON |
 
@@ -163,7 +163,7 @@ hour (`[discovery] every-secs`) unless a root's own mtime moved. A build dir tha
 out at once; a new one deeper in the tree waits for the next walk, and the run says so. Pass
 `--rediscover` to walk now.
 
-### `dunnage seed [--from DIR] [--dry-run] [--index FILE] [DIR]`
+### `swarfr seed [--from DIR] [--dry-run] [--index FILE] [DIR]`
 
 Fills the empty target of a fresh checkout from a sibling checkout of the same repository, so
 the first build does not compile every third-party crate again. `DIR` is the checkout to seed
@@ -178,7 +178,7 @@ each from the checkout that built *that* project most recently. A project absent
 is skipped. In a monorepo with several workspaces this seeds all of them in one run; a
 checkout that has nothing left to fill is an error, as before.
 
-### `dunnage worktree add [--dry-run] [--index FILE] GIT ARGS...`
+### `swarfr worktree add [--dry-run] [--index FILE] GIT ARGS...`
 
 `git worktree add GIT ARGS...`, then `seed` into the new worktree in one step. Run from a
 workspace inside the repository, the new worktree is seeded at the same relative path, from the
@@ -189,7 +189,7 @@ seed. `--dry-run` still adds the worktree and only reports what seeding would co
 dependencies whose sources stay where they are — registry crates, a vendor dir outside the
 repository — build warm; the workspace itself moved and is compiled again.
 
-### `dunnage daemon run [--config FILE] [--index FILE] [--once]`
+### `swarfr daemon run [--config FILE] [--index FILE] [--once]`
 
 The passes of `run`, with no flags: the config file decides the roots and the lossy passes, and
 names at least one root. The daemon walks the roots for build dirs (again every
@@ -202,16 +202,16 @@ it sleeps until the next unit is due, at most `interval-secs`.
 It stays in the foreground and logs to stderr; the service manager keeps it alive. `--once`
 looks once, runs if anything is due, and exits. A manual `run` meanwhile is refused with the run
 lock, and so is the daemon's look while a manual run goes on: it tries again at the next look.
-The daemon handles no signal: killed mid-run it leaves at most `.dunnage-tmp-*` files, which the
+The daemon handles no signal: killed mid-run it leaves at most `.swarfr-tmp-*` files, which the
 next run removes.
 
 State: `daemon.json` next to the hash index — the units, their last build, due and visited
 times, the last run's per-pass counts and busy units. A restarted daemon starts from it.
 
-### `dunnage daemon install [--config FILE] [--index FILE] [--print]`, `remove`, `status`
+### `swarfr daemon install [--config FILE] [--index FILE] [--print]`, `remove`, `status`
 
-`install` writes a launchd agent (`~/Library/LaunchAgents/dev.dunnage.daemon.plist`, logging
-to `~/Library/Logs/dunnage.log`) or a systemd user unit (`dunnage.service`), both at low CPU
+`install` writes a launchd agent (`~/Library/LaunchAgents/dev.swarfr.daemon.plist`, logging
+to `~/Library/Logs/swarfr.log`) or a systemd user unit (`swarfr.service`), both at low CPU
 and I/O priority, and starts it; `--config` and `--index` are passed on to `daemon run`.
 `--print` only shows the unit. `remove` stops the daemon and deletes the unit. `status [--index
 FILE] [--json]` says whether the unit is installed and prints the state file.
@@ -229,49 +229,49 @@ FILE] [--json]` says whether the unit is installed and prints the state file.
 A new worktree that builds warm:
 
 ```
-dunnage worktree add ../feature-x -b feature-x
+swarfr worktree add ../feature-x -b feature-x
 ```
 
-or, for a worktree that is already there, `dunnage seed ../feature-x`.
+or, for a worktree that is already there, `swarfr seed ../feature-x`.
 
 Reclaim the worktrees an agent or a script left behind — look first, then delete:
 
 ```
-dunnage run --dry-run --lossy orphans ~/code
-dunnage run --lossy orphans ~/code
+swarfr run --dry-run --lossy orphans ~/code
+swarfr run --lossy orphans ~/code
 ```
 
 The targets of crates deleted from a checkout that is still in use, once they were not built for
 a week (a crate that only another branch has looks the same, hence the wait):
 
 ```
-dunnage run --lossy orphans --orphans-project-idle-days 7 ~/code
+swarfr run --lossy orphans --orphans-project-idle-days 7 ~/code
 ```
 
 Keep all targets under a budget:
 
 ```
-dunnage run --lossy evict --evict-idle-days 30 --evict-max-total-gib 50 ~/code
+swarfr run --lossy evict --evict-idle-days 30 --evict-max-total-gib 50 ~/code
 ```
 
 The registry sources as well (no target dirs needed):
 
 ```
-dunnage run --cargo-home
+swarfr run --cargo-home
 ```
 
 A script that must tell "nothing to do" from "a build was in the way":
 
 ```
-dunnage run ~/code || test $? -eq 2
+swarfr run ~/code || test $? -eq 2
 ```
 
-`dunnage daemon install` does the scheduling; a `just` recipe is shown in `README.md`, "Running
+`swarfr daemon install` does the scheduling; a `just` recipe is shown in `README.md`, "Running
 it automatically".
 
 ## Configuration
 
-`$XDG_CONFIG_HOME/dunnage/config.toml`, else `~/.config/dunnage/config.toml`. Every key is
+`$XDG_CONFIG_HOME/swarfr/config.toml`, else `~/.config/swarfr/config.toml`. Every key is
 optional, a flag always wins over the file, and an unknown key stops the run.
 
 ```toml
@@ -331,5 +331,5 @@ names `status` prints: `cargo`, `swiftpm`, `dotnet`, `cmake`.
   the volume or `compsize` for a directory.
 - **Files a build just wrote are skipped.** Expected: `min-age` leaves anything younger than an
   hour alone, because the next build rewrites it anyway.
-- **Leftover `.dunnage-tmp-*` files.** A run was killed mid-replace. The original files are intact
+- **Leftover `.swarfr-tmp-*` files.** A run was killed mid-replace. The original files are intact
   and the next run removes the leftovers.

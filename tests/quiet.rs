@@ -7,11 +7,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Barrier};
 use std::time::{Duration, SystemTime};
 
-use dunnage::dedupe::{DEFAULT_MIN_SIZE, Dedupe};
-use dunnage::eco::{Ecosystem, Guard, Policy, Sharing};
-use dunnage::engine::{self, Action, Options, Pass, Skip};
-use dunnage::index::HashIndex;
-use dunnage::model::Profile;
+use swarfr::dedupe::{DEFAULT_MIN_SIZE, Dedupe};
+use swarfr::eco::{Ecosystem, Guard, Policy, Sharing};
+use swarfr::engine::{self, Action, Options, Pass, Skip};
+use swarfr::index::HashIndex;
+use swarfr::model::Profile;
 use tempfile::TempDir;
 
 mod common;
@@ -19,7 +19,7 @@ mod common;
 const BIG: usize = 3 * DEFAULT_MIN_SIZE as usize;
 const OLD_MTIME: Duration = Duration::from_secs(1_000_000_000);
 /// A process name nothing runs under: the check can look, and finds no build.
-const NO_TOOL: &[&str] = &["dunnage-test-no-such-tool"];
+const NO_TOOL: &[&str] = &["swarfr-test-no-such-tool"];
 
 /// A build system with no lock, whose tool runs under the names in `tools`.
 struct Lockless {
@@ -195,7 +195,7 @@ fn a_build_tool_running_in_the_unit_makes_it_busy() {
         .unwrap();
     // The child is seen once it has become `sleep`.
     let started = Instant::now();
-    while dunnage::sys::tool_running(&a, TOOL) != Some(true)
+    while swarfr::sys::tool_running(&a, TOOL) != Some(true)
         && started.elapsed() < Duration::from_secs(5)
     {
         std::thread::sleep(common::POLL);

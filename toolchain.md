@@ -24,14 +24,14 @@ too slow, see `DESIGN.md`).
 | go | global (brew), optional | `tests/store.rs`: the `GOCACHE` oracle for `--store`; `tests/go.rs`: `go mod verify` after `run --go`; skipped without it; `docs/bench.md` numbers | https://github.com/golang/go |
 | zip | system (macOS, most Linux distributions), optional | `tests/go.rs`: a module zip for the offline proxy dir, skipped without it | https://infozip.sourceforge.net/Zip.html |
 | lima | global (brew / mise) | A Linux VM with a btrfs loopback image: the only way to test the Linux half from a Mac | https://github.com/lima-vm/lima |
-| ketch | see its README | Installs dunnage | https://github.com/listepo/ketch |
-| dunnage | `ketch` | Lossless cleanup of `target/` after tests | https://github.com/listepo/dunnage |
+| ketch | see its README | Installs swarfr | https://github.com/listepo/ketch |
+| swarfr | `ketch` | Lossless cleanup of `target/` after tests | https://github.com/listepo/swarfr |
 
 ## ketch
 
 | Package | Where | Source | Why here |
 | --- | --- | --- | --- |
-| dunnage | global | https://github.com/listepo/dunnage | `just check`: lossless `target/` cleanup after tests |
+| swarfr | global | https://github.com/listepo/swarfr | `just check`: lossless `target/` cleanup after tests |
 
 ## cargo
 

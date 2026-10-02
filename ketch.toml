@@ -1,13 +1,13 @@
-# dunnage as a ketch package (T43).
+# swarfr as a ketch package (T43).
 #
-# Inference from github:listepo/dunnage should already work; this file is what
+# Inference from github:listepo/swarfr should already work; this file is what
 # `ketch push` sends to the registry and what docs / `ketch info` show.
 # Schema: listepo/ketch docs/MANIFESTS.md.
 
-name = "dunnage"
-source = "github:listepo/dunnage"
+name = "swarfr"
+source = "github:listepo/swarfr"
 description = "Shrink Cargo target directories without slowing builds"
-homepage = "https://github.com/listepo/dunnage"
+homepage = "https://github.com/listepo/swarfr"
 
 # Name the archive dist publishes for each host outright; skip the self-updater
 # sidecar and the source tarball so scoring cannot pick those by mistake.
@@ -15,6 +15,6 @@ homepage = "https://github.com/listepo/dunnage"
 exclude = ["*-update*", "source.tar.gz"]
 
 [asset.target]
-"macos-aarch64" = "dunnage-aarch64-apple-darwin.tar.xz"
-"linux-x86_64" = "dunnage-x86_64-unknown-linux-gnu.tar.xz"
-"windows-x86_64" = "dunnage-x86_64-pc-windows-msvc.zip"
+"macos-aarch64" = "swarfr-aarch64-apple-darwin.tar.xz"
+"linux-x86_64" = "swarfr-x86_64-unknown-linux-gnu.tar.xz"
+"windows-x86_64" = "swarfr-x86_64-pc-windows-msvc.zip"

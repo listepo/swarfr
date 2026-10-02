@@ -8,7 +8,7 @@ cargo-dist-version = "0.32.0"
 # CI backends to support
 ci = "github"
 # The installers to generate for each app.
-# Homebrew builds Formula/dunnage.rb as a Release asset only. Do NOT add
+# Homebrew builds Formula/swarfr.rb as a Release asset only. Do NOT add
 # publish-jobs = ["homebrew"]: that job needs HOMEBREW_TAP_TOKEN and pushes straight to
 # listepo/homebrew-tap. Pulling the asset into the tap is R7 — see docs/release.md.
 installers = ["shell", "homebrew"]
@@ -30,7 +30,7 @@ github-build-setup = "../build-setup.yml"
 # Start a release from the Actions tab. dist creates the tag itself, so `bump.yml` only has to
 # land the version commit; a tag push still triggers the workflow for anyone releasing by hand.
 dispatch-releases = true
-# Ship `dunnage-update` beside `dunnage` so an installed binary can update itself.
+# Ship `swarfr-update` beside `swarfr` so an installed binary can update itself.
 install-updater = true
 # The test gate is NOT a dist `plan-jobs` entry. dist's `host` job runs on
 # `build-local-artifacts.result == 'skipped'`, and a failed custom job skips it — so a red gate

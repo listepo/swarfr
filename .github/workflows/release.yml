@@ -150,9 +150,9 @@ jobs:
             exit 1
           fi
 
-          keychain="$RUNNER_TEMP/dunnage-codesign-discover.keychain-db"
+          keychain="$RUNNER_TEMP/swarfr-codesign-discover.keychain-db"
           keychain_pwd="$(openssl rand -hex 16)"
-          cert="$RUNNER_TEMP/dunnage-certificate.p12"
+          cert="$RUNNER_TEMP/swarfr-certificate.p12"
           echo "$MACOS_CERTIFICATE" | base64 --decode > "$cert"
 
           security create-keychain -p "$keychain_pwd" "$keychain"
@@ -224,7 +224,7 @@ jobs:
             echo "| File | Size |"
             echo "|---|---:|"
             find "$root" -maxdepth 1 -type f \( \
-              -name '*.tar.xz' -o -name '*.zip' -o -name '*-update' -o -name 'dunnage-installer.sh' -o -name 'dunnage.rb' -o -name 'sha256.sum' -o -name 'source.tar.gz' \
+              -name '*.tar.xz' -o -name '*.zip' -o -name '*-update' -o -name 'swarfr-installer.sh' -o -name 'swarfr.rb' -o -name 'sha256.sum' -o -name 'source.tar.gz' \
             \) -print0 | sort -z | while IFS= read -r -d '' f; do
               bytes=$(wc -c <"$f" | tr -d ' ')
               human=$(awk -v b="$bytes" 'BEGIN {
@@ -298,7 +298,7 @@ jobs:
             echo "| File | Size |"
             echo "|---|---:|"
             find "$root" -maxdepth 1 -type f \( \
-              -name '*.tar.xz' -o -name '*.zip' -o -name '*-update' -o -name 'dunnage-installer.sh' -o -name 'dunnage.rb' -o -name 'sha256.sum' -o -name 'source.tar.gz' \
+              -name '*.tar.xz' -o -name '*.zip' -o -name '*-update' -o -name 'swarfr-installer.sh' -o -name 'swarfr.rb' -o -name 'sha256.sum' -o -name 'source.tar.gz' \
             \) -print0 | sort -z | while IFS= read -r -d '' f; do
               bytes=$(wc -c <"$f" | tr -d ' ')
               human=$(awk -v b="$bytes" 'BEGIN {
@@ -390,7 +390,7 @@ jobs:
             echo "| File | Size |"
             echo "|---|---:|"
             find artifacts -maxdepth 1 -type f \( \
-              -name '*.tar.xz' -o -name '*.zip' -o -name '*-update' -o -name 'dunnage-installer.sh' -o -name 'dunnage.rb' -o -name 'source.tar.gz' \
+              -name '*.tar.xz' -o -name '*.zip' -o -name '*-update' -o -name 'swarfr-installer.sh' -o -name 'swarfr.rb' -o -name 'source.tar.gz' \
             \) -print0 | sort -z | while IFS= read -r -d '' f; do
               bytes=$(wc -c <"$f" | tr -d ' ')
               human=$(awk -v b="$bytes" 'BEGIN {

@@ -9,17 +9,17 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime};
 
-use dunnage::compress::Compress;
-use dunnage::eco::store::{self, STORE};
-use dunnage::engine::{self, Action, Options, Pass, Skip};
-use dunnage::index::HashIndex;
-use dunnage::model::Profile;
 use sha2::{Digest, Sha256};
+use swarfr::compress::Compress;
+use swarfr::eco::store::{self, STORE};
+use swarfr::engine::{self, Action, Options, Pass, Skip};
+use swarfr::index::HashIndex;
+use swarfr::model::Profile;
 use tempfile::TempDir;
 use walkdir::WalkDir;
 
 mod common;
-use common::{allocated_bytes, dunnage, fake_target};
+use common::{allocated_bytes, fake_target, swarfr};
 
 /// Old enough for every floor: the store's hour and compress's own default.
 const TWO_DAYS: Duration = Duration::from_secs(2 * 24 * 60 * 60);
@@ -112,7 +112,7 @@ fn compress_leaves_mtime_mode_and_content_of_every_entry_as_they_were() {
     assert_eq!(report.passes[0].applied, 12, "{report:?}");
     assert_eq!(files(&store), before);
     // btrfs reports the uncompressed size in `st_blocks`.
-    if dunnage::sys::ALLOCATED_SHOWS_COMPRESSION {
+    if swarfr::sys::ALLOCATED_SHOWS_COMPRESSION {
         assert!(allocated_bytes(&store) < bytes_before / 2);
     }
 }
@@ -240,7 +240,7 @@ fn a_compressed_gocache_still_hits_and_still_matches_its_names() {
     let report = compress_store(&cache);
 
     assert!(report.passes[0].applied > 0, "{report:?}");
-    if dunnage::sys::ALLOCATED_SHOWS_COMPRESSION {
+    if swarfr::sys::ALLOCATED_SHOWS_COMPRESSION {
         assert!(allocated_bytes(&cache) < bytes_before);
     }
     let mut entries = 0;
@@ -269,7 +269,7 @@ fn run_store_needs_no_root_and_reports_the_store_as_unlocked() {
     let config_home = tmp.path().join("config-home");
     fs::create_dir_all(&config_home).unwrap();
 
-    let out = dunnage(&config_home)
+    let out = swarfr(&config_home)
         .args(["run", "--json", "--store"])
         .arg(&store)
         .arg("--index")
@@ -290,7 +290,7 @@ fn run_refuses_a_ccache_dir_before_touching_anything() {
     let ccache = tmp.path().join("ccache");
     fs::create_dir_all(&ccache).unwrap();
 
-    dunnage(tmp.path())
+    swarfr(tmp.path())
         .args(["run", "--store"])
         .arg(&ccache)
         .arg("--index")

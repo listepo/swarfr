@@ -204,7 +204,7 @@ survive below as constraints on how the daemon and an embedding behave, not as a
 neither.
 
 ```
-the library `dunnage` — no clap, no printing, no exit codes, no env reads
+the library `swarfr` — no clap, no printing, no exit codes, no env reads
     Session: open(settings) → inventory() → plan(request) → apply(plan) → Report
     eco/ adapters · engine · model · index · passes · sys/
 
@@ -261,9 +261,9 @@ Rules that keep all three front ends possible, each of them checkable:
   IPC**: the two coordinate through that lock and through files — the hash index, the daemon's
   state file — so neither is the other's client and either works without the other.
 
-**The daemon** (T34) is `dunnage daemon`: the same binary, a foreground process that the
+**The daemon** (T34) is `swarfr daemon`: the same binary, a foreground process that the
 service manager keeps alive — launchd, a systemd user unit, a Windows service later.
-`dunnage daemon install | remove | status` writes and removes that unit and reads the state
+`swarfr daemon install | remove | status` writes and removes that unit and reads the state
 file; the process never forks itself into the background. What is daemon-only is small:
 
 - *Triggers.* A slow timer re-runs discovery; a fast one looks at known units. A filesystem
@@ -344,8 +344,8 @@ waits for the `notify` decision.
 
 The daemon's loop lives in the binary's half because only a process has triggers; everything
 it *does* is a `Session` call. How the tool is invoked without cargo is settled with the first
-non-cargo adapter; since T42 the binary is `dunnage`, with `cargo dunnage` as an optional link,
-so someone with no cargo at all already has a name to call.
+non-cargo adapter; since T42 the binary has a name of its own (`swarfr` since T46), with
+`cargo swarfr` as an optional link, so someone with no cargo at all already has a name to call.
 
 ## Testing
 

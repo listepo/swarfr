@@ -1,12 +1,12 @@
-# dunnage
+# swarfr
 
-https://github.com/listepo/dunnage
+https://github.com/listepo/swarfr
 
 A tool (a CLI and a daemon) that shrinks live `target/` directories without slowing
 builds: transparent filesystem compression, copy-on-write dedupe across targets, clone-seeding
 of new worktrees, and opt-in removal of orphaned or idle targets — planned together so the
-approaches reinforce each other. Called `cargo-tare` until T42.
-Design in `DESIGN.md`, measurements in `docs/research.md`.
+approaches reinforce each other. Called `cargo-tare` until T42
+and `dunnage` until T46. Design in `DESIGN.md`, measurements in `docs/research.md`.
 
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
@@ -30,7 +30,7 @@ that finding in `docs/research.md`) and `docs/architecture.md` (the monorepo tas
 
 ### T43. Release pipeline: GitHub releases with binaries
 
-Decided by the creator: release dunnage the way `rtok` does. Split out of R7, which keeps
+Decided by the creator: release swarfr the way `rtok` does. Split out of R7, which keeps
 crates.io and the tap's own sync workflow. Done: merging a `release: vX.Y.Z` pull request, or
 running Actions → **Bump and release**, gates on the CI checks, tags `vX.Y.Z` and publishes a
 GitHub Release with signed macOS, Linux and Windows archives, a shell installer, a self-updater

@@ -1,9 +1,10 @@
-# dunnage
+# swarfr
 
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=listepo_dunnage&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=listepo_dunnage) [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=listepo_dunnage&metric=coverage)](https://sonarcloud.io/component_measures?id=listepo_dunnage&metric=coverage) [![Tests](https://img.shields.io/sonar/tests/listepo_dunnage?server=https%3A%2F%2Fsonarcloud.io&compact_message)](https://sonarcloud.io/component_measures?id=listepo_dunnage&metric=tests)
 
-Dunnage: the loose packing stuffed around the cargo in a hold — it takes up room and is not the
-goods. `dunnage` takes that dead weight out of Cargo `target/` directories — without deleting what you still build with and without slowing builds.
+Swarf: the chips and shavings a lathe or a mill throws off — metal cut away, waste that is not
+the part. Much of a Cargo `target/` directory is swarf, and `swarfr` sweeps it out — without
+deleting what you still build with and without slowing builds.
 
 Status: early. Every command and pass below works on macOS and Linux; Windows builds and reports
 but plans no work until `T21` in `plan.md`. A step-by-step guide is in `docs/usage.md`; whether
@@ -44,23 +45,23 @@ hardlink groups as one unit.
 Works today:
 
 ```
-dunnage status ~/code            # read-only: every target under the root
-dunnage status --cargo-home ~/code  # and what the registry sources weigh
-dunnage status --json ~/code
-dunnage run --dry-run ~/code     # plan only
-dunnage run ~/code
-dunnage run [--dry-run] [--pass <PASS>]... [--lossy <PASS>]... [--index <FILE>]
+swarfr status ~/code            # read-only: every target under the root
+swarfr status --cargo-home ~/code  # and what the registry sources weigh
+swarfr status --json ~/code
+swarfr run --dry-run ~/code     # plan only
+swarfr run ~/code
+swarfr run [--dry-run] [--pass <PASS>]... [--lossy <PASS>]... [--index <FILE>]
                [--config <FILE>] [--json] [<ROOT>...]
                [--min-age <SECS>] [--min-size <BYTES>]
-dunnage advise ~/code            # read-only: what makes these targets bigger
-dunnage seed [--from <DIR>] [--dry-run] [--index <FILE>] [<DIR>]
-dunnage worktree add [--dry-run] [--index <FILE>] <GIT ARGS>...
-dunnage run --cargo-home ~/code     # and the registry sources in ~/.cargo
-dunnage run --store "$(go env GOCACHE)"  # a content-addressed store, compress only
-dunnage run --go                         # GOCACHE, and the unpacked modules in GOMODCACHE
-dunnage run --dry-run --lossy orphans ~/code
-dunnage run --dry-run --lossy evict --evict-idle-days 30 ~/code
-dunnage run --lossy evict --evict-max-total-gib 50 ~/code
+swarfr advise ~/code            # read-only: what makes these targets bigger
+swarfr seed [--from <DIR>] [--dry-run] [--index <FILE>] [<DIR>]
+swarfr worktree add [--dry-run] [--index <FILE>] <GIT ARGS>...
+swarfr run --cargo-home ~/code     # and the registry sources in ~/.cargo
+swarfr run --store "$(go env GOCACHE)"  # a content-addressed store, compress only
+swarfr run --go                         # GOCACHE, and the unpacked modules in GOMODCACHE
+swarfr run --dry-run --lossy orphans ~/code
+swarfr run --dry-run --lossy evict --evict-idle-days 30 ~/code
+swarfr run --lossy evict --evict-max-total-gib 50 ~/code
 ```
 
 `status` lists build dirs grouped by family (a repository and its worktrees), then by checkout,
@@ -78,7 +79,7 @@ printed at the end. A `<ROOT>` is searched for targets; a target dir itself work
 It takes cargo's own lock, skips profile dirs with a running build, leaves alone files younger
 than one hour or too small to win a block (8 KB for compress, 4 KB for dedupe), works on private
 copies and swaps them in with `rename`, keeps mtimes so nothing is rebuilt, and remembers content
-hashes in `~/.cache/dunnage/hashes-v1.bin` so the next run reads only new files.
+hashes in `~/.cache/swarfr/hashes-v1.bin` so the next run reads only new files.
 Only dirs carrying cargo's own `CACHEDIR.TAG` count as targets. `--lossy` enables a
 pass that deletes rebuildable data; lossless passes need no flag. How the engine keeps a target
 safe is described in `DESIGN.md`, "Engine" and "Safety invariants".
@@ -99,7 +100,7 @@ still there — a deleted crate, or one only another branch has — goes too, bu
 `--orphans-project-idle-days N` and only once it has not been built for N days: a branch switch
 looks exactly like a deletion. Without the flag it is only reported.
 
-**seed** copies instead of deleting. In a fresh worktree, `dunnage seed` clones the target of
+**seed** copies instead of deleting. In a fresh worktree, `swarfr seed` clones the target of
 a sibling checkout of the same repository — the one built most recently, at the same place
 inside it — into yours. On APFS every file is a `clonefile`, so the new target shares its blocks
 with the old one and costs no disk space until something rewrites it. `incremental/`, the lock
@@ -157,8 +158,8 @@ running `cargo fetch` stops the pass instead of racing it. Nothing is deleted an
 content or mtime changes, which is what decides whether cargo unpacks a crate again; it does not.
 Measured on a clone of a real home (`docs/bench.md`): 1.52 GiB of registry sources down to
 469 MiB, 69% off, and the build afterwards reports nothing stale and unpacks nothing again.
-The run needs no target dirs of its own, so `dunnage run --cargo-home` alone is a valid run,
-and `dunnage status --cargo-home` reports the same dirs without touching them (it is opt-in
+The run needs no target dirs of its own, so `swarfr run --cargo-home` alone is a valid run,
+and `swarfr status --cargo-home` reports the same dirs without touching them (it is opt-in
 because measuring them costs a second walk).
 
 `--store DIR` compresses a content-addressed store: `GOCACHE`, `~/.cabal/store`, Zig's global
@@ -216,7 +217,7 @@ profile dir was skipped because a build held its lock — what a scheduled run n
 
 ## Configuration
 
-`$XDG_CONFIG_HOME/dunnage/config.toml`, or `~/.config/dunnage/config.toml`. Every key is
+`$XDG_CONFIG_HOME/swarfr/config.toml`, or `~/.config/swarfr/config.toml`. Every key is
 optional and every flag wins over the file; `--config <FILE>` reads another file instead, and a
 file named there must exist. An unknown key stops the run rather than being ignored.
 
@@ -312,24 +313,24 @@ The lossless passes are safe to run unattended: they never delete, they skip a p
 running build, and exit code `2` says a build was in the way. A `just` recipe after a build:
 
 ```just
-dunnage:
-    dunnage run ~/code || test $? -eq 2
+swarfr:
+    swarfr run ~/code || test $? -eq 2
 ```
 
 Or as a service that looks when a build dir has gone cold rather than at a fixed hour:
 
 ```
-dunnage daemon install
+swarfr daemon install
 ```
 
-That writes a launchd agent (`~/Library/LaunchAgents/dev.dunnage.daemon.plist`) or a systemd
-user unit (`~/.config/systemd/user/dunnage.service`) running `dunnage daemon run` at low CPU and
+That writes a launchd agent (`~/Library/LaunchAgents/dev.swarfr.daemon.plist`) or a systemd
+user unit (`~/.config/systemd/user/swarfr.service`) running `swarfr daemon run` at low CPU and
 I/O priority, and starts it. The daemon runs the passes the config file names over its `roots`,
 once per build: a build dir is visited when its last build is older than `min-age`, and not
 again until it is built once more. It never keeps a build waiting for longer than its lock
-budget (2 s), lossy passes run only if the config enables them, and `dunnage daemon status`
+budget (2 s), lossy passes run only if the config enables them, and `swarfr daemon status`
 says what it did last and what is due when. `--print` shows the unit without installing it;
-`dunnage daemon remove` stops and removes it. Windows has no service yet.
+`swarfr daemon remove` stops and removes it. Windows has no service yet.
 
 ## License
 

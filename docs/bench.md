@@ -61,7 +61,7 @@ it recovers 407 MiB rather than the full gigabyte.
 A second machine, a different workload, and the reason the table above has a twin: on btrfs the
 win does not show up where macOS shows it. Measured in a Linux VM (Ubuntu 24.04, 4 cores, a
 6 GiB btrfs loopback image mounted with default options) on an unshared copy of a real cargo
-target — `dunnage`'s own, 1.33 GiB, one checkout and therefore no family for dedupe to
+target — `swarfr`'s own, 1.33 GiB, one checkout and therefore no family for dedupe to
 compare against.
 
 | Pass | `du` before | `du` after | `du` delta | Free space delta | Wall clock |
@@ -131,7 +131,7 @@ second round at all.
 the repository, not another worktree: its own `.git`, so its own family, holding the same
 dependencies built the same way — two unrelated projects, as far as the tool is concerned.
 
-This part was measured on **`dunnage` itself** rather than on that workspace: the machine had
+This part was measured on **`swarfr` itself** rather than on that workspace: the machine had
 10 GiB free at the time and three checkouts of it do not fit under the script's own
 free-space guard. The targets are therefore an order of magnitude smaller, and only the ratio is
 worth reading.
@@ -187,7 +187,7 @@ the fixture test only.
 
 `--store` on a `GOCACHE` of its own: `go build std` (go 1.27.1, darwin/arm64) into an empty
 cache in a temp dir, every file's mtime moved back past the store's one-hour floor, then
-`dunnage run --store <cache>` from a release build. APFS.
+`swarfr run --store <cache>` from a release build. APFS.
 
 | | before | after | delta |
 | --- | --- | --- | --- |
@@ -220,7 +220,7 @@ tests. Without the lift, the same run skips every file with `PermissionDenied`.
 
 swift-argument-parser (shallow clone of `main`), Swift 6.4 on macOS 27, APFS: `swift build` and
 `swift build -c release` into an empty `.build` in a temp dir, then
-`dunnage run --min-age 0 <package>` from a release build.
+`swarfr run --min-age 0 <package>` from a release build.
 
 | | before | after | delta |
 | --- | --- | --- | --- |
@@ -237,7 +237,7 @@ give dedupe more to share, not measured yet.
 
 fmt (shallow clone of `master`, `6d71f74`), AppleClang on macOS 27, APFS: configured with
 `-DCMAKE_BUILD_TYPE=Debug -DFMT_TEST=ON`, Unix Makefiles, `cmake --build -j 8`, every file then
-moved back two days past the quiet tier's floor, and `dunnage run --min-age 0 build` from a
+moved back two days past the quiet tier's floor, and `swarfr run --min-age 0 build` from a
 release build.
 
 | | before | after | delta |
@@ -275,7 +275,7 @@ over the whole tree costs what naming each target by hand did.
 sccache answers a different question: it makes a *rebuild from scratch* about twice as fast, at
 the price of a slower first build and a 304 MiB cache of its own. It does not shrink a live
 target — its targets are smaller here only because a wrapper turns cargo's incremental
-compilation off. The two are complementary, and nothing in `dunnage` conflicts with it.
+compilation off. The two are complementary, and nothing in `swarfr` conflicts with it.
 
 ## What the defaults are worth
 

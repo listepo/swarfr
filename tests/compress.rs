@@ -8,19 +8,19 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime};
 
-use dunnage::compress::{Compress, DEFAULT_MIN_AGE, DEFAULT_MIN_SIZE};
-use dunnage::dedupe::Dedupe;
-use dunnage::eco::cargo::{CARGO, LOCK_FILE};
-use dunnage::engine::{self, Options, PassReport, Skip};
-use dunnage::index::{HASH_BYTES, HashIndex};
-use dunnage::model::{Stamp, TMP_PREFIX};
-use dunnage::sys;
+use swarfr::compress::{Compress, DEFAULT_MIN_AGE, DEFAULT_MIN_SIZE};
+use swarfr::dedupe::Dedupe;
+use swarfr::eco::cargo::{CARGO, LOCK_FILE};
+use swarfr::engine::{self, Options, PassReport, Skip};
+use swarfr::index::{HASH_BYTES, HashIndex};
+use swarfr::model::{Stamp, TMP_PREFIX};
+use swarfr::sys;
 use tempfile::TempDir;
 
 mod common;
 use common::{Fixture, allocated_bytes, ino, run_unbusy};
 
-const LINE: &[u8] = b"dunnage: a line of text that compresses very well\n";
+const LINE: &[u8] = b"swarfr: a line of text that compresses very well\n";
 const BIG: usize = 8 * DEFAULT_MIN_SIZE as usize;
 /// Real targets hold rlibs of this size; T2 saw a 119 MB file left uncompressed.
 const HUGE: usize = 130 << 20;
@@ -84,7 +84,7 @@ struct Outcome {
     notes: Vec<String>,
 }
 
-/// Compress, then dedupe, the way `dunnage run` registers them.
+/// Compress, then dedupe, the way `swarfr run` registers them.
 fn run(dirs: &[PathBuf], index: &RefCell<HashIndex>, min_age: Duration) -> Outcome {
     let (mut compress, mut dedupe) = (Compress::new(index), Dedupe::new(index));
     compress.min_age = min_age;

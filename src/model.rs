@@ -12,7 +12,7 @@ use crate::eco::Ecosystem;
 use crate::sys;
 
 /// Prefix of our temp files. Leftovers of a crashed run are removed by the next one.
-pub const TMP_PREFIX: &str = ".dunnage-tmp-";
+pub const TMP_PREFIX: &str = ".swarfr-tmp-";
 
 /// Identity and version of a file. Any rewrite by the build changes it.
 ///

@@ -5,15 +5,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use dunnage::config::Config;
-use dunnage::eco::cargo::CARGO;
-use dunnage::inventory;
-use dunnage::seed;
-use dunnage::session::{Control, Request, Session, Settings};
+use swarfr::config::Config;
+use swarfr::eco::cargo::CARGO;
+use swarfr::inventory;
+use swarfr::seed;
+use swarfr::session::{Control, Request, Session, Settings};
 use tempfile::TempDir;
 
 mod common;
-use common::{dunnage, fake_target, filesystem_can, git};
+use common::{fake_target, filesystem_can, git, swarfr};
 
 /// `repo` with workspaces `services/api` and `tools/cli`, both built, and a worktree `wt` with
 /// only `services/api` built. A build script of `api` left a CMake build dir and a whole nested
@@ -129,7 +129,7 @@ fn seed_finds_the_same_position_in_a_sibling_checkout() {
 /// Moves the entries of every profile dir of `target` back by `days`: what `last_used` reads.
 fn built_days_ago(target: &Path, days: u64) {
     let then = std::time::SystemTime::now() - std::time::Duration::from_secs(days * 24 * 60 * 60);
-    for profile in dunnage::eco::cargo::profile_dirs(target).unwrap() {
+    for profile in swarfr::eco::cargo::profile_dirs(target).unwrap() {
         for entry in fs::read_dir(&profile).unwrap() {
             let entry = fs::File::open(entry.unwrap().path()).unwrap();
             entry.set_modified(then).unwrap();
@@ -298,7 +298,7 @@ fn status_groups_by_family_checkout_and_ecosystem_and_lists_the_largest() {
     let base = mono.repo.parent().unwrap();
     let status = |all: bool| -> String {
         let tmp = TempDir::new().unwrap();
-        let mut cmd = dunnage(tmp.path());
+        let mut cmd = swarfr(tmp.path());
         cmd.arg("status").arg(base);
         if all {
             cmd.arg("--all");

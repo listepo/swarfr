@@ -4,8 +4,8 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use dunnage::eco::cargo::LOCK_FILE;
-use dunnage::inventory::{self, Target};
+use swarfr::eco::cargo::LOCK_FILE;
+use swarfr::inventory::{self, Target};
 use tempfile::TempDir;
 
 const CARGO_TAG: &str = "Signature: 8a477f597d28d172789f06886806bc55\n\
@@ -76,7 +76,7 @@ fn allocated_size_matches_du_with_hardlinks_and_files_outside_profiles() {
     assert!(found.last_built_unix.is_some());
     // The figure is what this filesystem could actually compress, so where it compresses
     // nothing the honest answer is zero — `tests/caps.rs` runs the pass on both sides.
-    if dunnage::sys::caps(&target).compress {
+    if swarfr::sys::caps(&target).compress {
         assert!(found.compressible_bytes >= 3 * MIB as u64);
     } else {
         assert_eq!(found.compressible_bytes, 0);
@@ -146,7 +146,7 @@ fn worktrees_form_a_family_and_a_removed_record_reads_as_orphaned() {
     );
     // An upper bound on what dedupe could share, which is nothing where blocks cannot be
     // shared at all.
-    if dunnage::sys::caps(&in_main.root).clone {
+    if swarfr::sys::caps(&in_main.root).clone {
         assert!(in_main.dedupe_candidate_bytes >= MIB as u64);
         assert!(in_worktree.dedupe_candidate_bytes >= MIB as u64);
     } else {
@@ -173,7 +173,7 @@ fn status_json_is_machine_readable() {
     make_target(&root.join("a/target"));
     make_target(&root.join("b/target"));
 
-    let out = Command::new(env!("CARGO_BIN_EXE_dunnage"))
+    let out = Command::new(env!("CARGO_BIN_EXE_swarfr"))
         .args(["status", "--json"])
         .arg(&root)
         .output()

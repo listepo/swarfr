@@ -1,13 +1,13 @@
 [package]
-name = "dunnage"
+name = "swarfr"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.98"
 description = "Shrink Cargo target directories without slowing builds"
 publish = false
 # cargo-dist hosts releases on this repository; the Homebrew formula links the homepage (T43).
-repository = "https://github.com/listepo/dunnage"
-homepage = "https://github.com/listepo/dunnage"
+repository = "https://github.com/listepo/swarfr"
+homepage = "https://github.com/listepo/swarfr"
 
 # The binary is a front end; the library builds without its dependencies, so a build system
 # can embed it (`cargo check --lib --no-default-features`).
@@ -16,7 +16,7 @@ default = ["cli"]
 cli = ["dep:anyhow", "dep:clap"]
 
 [[bin]]
-name = "dunnage"
+name = "swarfr"
 path = "src/main.rs"
 required-features = ["cli"]
 

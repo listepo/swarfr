@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use dunnage::Error;
-use dunnage::engine::{Interrupted, Report};
-use dunnage::session::{Control, Observer, Request, Session, Settings};
+use swarfr::Error;
+use swarfr::engine::{Interrupted, Report};
+use swarfr::session::{Control, Observer, Request, Session, Settings};
 use tempfile::TempDir;
 
 mod common;
@@ -125,13 +125,13 @@ fn the_cli_exits_2_when_another_run_holds_the_lock() {
     let lock = std::fs::File::create(&held).unwrap();
     lock.lock().unwrap();
 
-    common::dunnage(tmp.path())
+    common::swarfr(tmp.path())
         .args(["run", "--index"])
         .arg(&index)
         .arg(&root)
         .assert()
         .code(2)
-        .stderr(predicates::str::contains("another run of dunnage holds"));
+        .stderr(predicates::str::contains("another run of swarfr holds"));
 }
 
 /// Raises the stop flag once the first group is done.

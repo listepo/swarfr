@@ -9,13 +9,13 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
-use dunnage::eco::cargo;
-use dunnage::eco::cargo::{CARGO, LOCK_FILE};
-use dunnage::engine::{
+use swarfr::eco::cargo;
+use swarfr::eco::cargo::{CARGO, LOCK_FILE};
+use swarfr::engine::{
     self, Action, Interrupt, Interrupted, Options, Pass, Replace, Report, Share, Skip,
 };
-use dunnage::model::Stamp;
-use dunnage::model::{self, Profile, TMP_PREFIX};
+use swarfr::model::Stamp;
+use swarfr::model::{self, Profile, TMP_PREFIX};
 use tempfile::TempDir;
 
 mod common;

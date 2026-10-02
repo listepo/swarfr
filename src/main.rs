@@ -6,11 +6,11 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, ensure};
 use clap::{Parser, Subcommand};
-use dunnage::config::{self, Config};
-use dunnage::eco::cargo::home as cargo_home;
-use dunnage::engine;
-use dunnage::inventory::{Inventory, Target};
-use dunnage::session::{self, Control, Observer, Request, RunReport, Session, Settings};
+use swarfr::config::{self, Config};
+use swarfr::eco::cargo::home as cargo_home;
+use swarfr::engine;
+use swarfr::inventory::{Inventory, Target};
+use swarfr::session::{self, Control, Observer, Request, RunReport, Session, Settings};
 
 mod daemon;
 
@@ -22,18 +22,18 @@ const SECS_PER_DAY: u64 = 24 * 60 * 60;
 
 /// Shrink Cargo target directories without slowing builds
 #[derive(Parser)]
-#[command(name = "dunnage", version)]
+#[command(name = "swarfr", version)]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
 }
 
-/// The arguments, without the subcommand name cargo puts first: a `cargo-dunnage` link to this
-/// binary is run by `cargo dunnage <args>` as `cargo-dunnage dunnage <args>`. No subcommand of
-/// ours is called `dunnage`, so dropping it cannot take anything else away.
+/// The arguments, without the subcommand name cargo puts first: a `cargo-swarfr` link to this
+/// binary is run by `cargo swarfr <args>` as `cargo-swarfr swarfr <args>`. No subcommand of
+/// ours is called `swarfr`, so dropping it cannot take anything else away.
 fn args() -> Vec<std::ffi::OsString> {
     let mut args: Vec<_> = std::env::args_os().collect();
-    if args.get(1).is_some_and(|first| first == "dunnage") {
+    if args.get(1).is_some_and(|first| first == "swarfr") {
         args.remove(1);
     }
     args
@@ -84,7 +84,7 @@ enum Cmd {
         /// Report what would be copied without touching anything
         #[arg(long)]
         dry_run: bool,
-        /// Content-hash cache [default: ~/.cache/dunnage/hashes-v1.bin]
+        /// Content-hash cache [default: ~/.cache/swarfr/hashes-v1.bin]
         #[arg(long, value_name = "FILE")]
         index: Option<PathBuf>,
         /// The checkout to seed [default: .]
@@ -100,7 +100,7 @@ enum WorktreeCmd {
         /// Seed as a dry run: the worktree is still added
         #[arg(long)]
         dry_run: bool,
-        /// Content-hash cache [default: ~/.cache/dunnage/hashes-v1.bin]
+        /// Content-hash cache [default: ~/.cache/swarfr/hashes-v1.bin]
         #[arg(long, value_name = "FILE")]
         index: Option<PathBuf>,
         /// Passed to `git worktree add` as they are
@@ -119,11 +119,11 @@ enum DaemonCmd {
     /// Stay in the foreground and run the config's passes over its `roots` whenever a build dir
     /// built since the last look has gone cold. Lossy passes run only if the config enables them
     Run {
-        /// Configuration file [default: $XDG_CONFIG_HOME/dunnage/config.toml]
+        /// Configuration file [default: $XDG_CONFIG_HOME/swarfr/config.toml]
         #[arg(long, value_name = "FILE")]
         config: Option<PathBuf>,
         /// Content-hash cache; the state file sits next to it
-        /// [default: ~/.cache/dunnage/hashes-v1.bin]
+        /// [default: ~/.cache/swarfr/hashes-v1.bin]
         #[arg(long, value_name = "FILE")]
         index: Option<PathBuf>,
         /// Look once, run if anything is due, write the state file and exit
@@ -148,7 +148,7 @@ enum DaemonCmd {
     /// Whether the unit is installed, the last run, and which build dirs are due when
     Status {
         /// Content-hash cache the daemon was started with
-        /// [default: ~/.cache/dunnage/hashes-v1.bin]
+        /// [default: ~/.cache/swarfr/hashes-v1.bin]
         #[arg(long, value_name = "FILE")]
         index: Option<PathBuf>,
         /// Print the state file as it is
@@ -216,13 +216,13 @@ struct RunArgs {
     /// sharing it. Off by default, and the cargo home's sources are shared without it
     #[arg(long)]
     link_artifacts: bool,
-    /// Content-hash cache [default: ~/.cache/dunnage/hashes-v1.bin]
+    /// Content-hash cache [default: ~/.cache/swarfr/hashes-v1.bin]
     #[arg(long, value_name = "FILE")]
     index: Option<PathBuf>,
     /// Walk the roots for build dirs even if the last walk is recent enough to reuse
     #[arg(long)]
     rediscover: bool,
-    /// Configuration file [default: $XDG_CONFIG_HOME/dunnage/config.toml]
+    /// Configuration file [default: $XDG_CONFIG_HOME/swarfr/config.toml]
     #[arg(long, value_name = "FILE")]
     config: Option<PathBuf>,
     /// Print the report as JSON instead of a table
@@ -279,8 +279,8 @@ fn main() -> ExitCode {
             eprintln!("error: {error:#}");
             // Another run is working on the same targets: the same "try again later".
             let busy = matches!(
-                error.downcast_ref::<dunnage::Error>(),
-                Some(dunnage::Error::RunLockHeld(_))
+                error.downcast_ref::<swarfr::Error>(),
+                Some(swarfr::Error::RunLockHeld(_))
             );
             if busy {
                 ExitCode::from(BUSY_EXIT)
@@ -366,7 +366,7 @@ fn gib(bytes: u64) -> String {
 
 /// What the filesystem under a target cannot do, in the words of the passes it silences.
 /// `None` when it can do everything, which needs no line.
-fn missing_caps(caps: &dunnage::sys::Caps) -> Option<&'static str> {
+fn missing_caps(caps: &swarfr::sys::Caps) -> Option<&'static str> {
     match (caps.clone, caps.compress) {
         (true, true) => None,
         (true, false) => {
@@ -503,7 +503,7 @@ fn print_target(target: &Target, now: u64) {
     }
 }
 
-/// `dunnage advise`: how to print what the session found.
+/// `swarfr advise`: how to print what the session found.
 fn advise(json: bool, roots: Vec<PathBuf>) -> Result<()> {
     let roots = roots_or_config(roots)?;
     let session = Session::open(Settings::default());
@@ -537,7 +537,7 @@ fn advise(json: bool, roots: Vec<PathBuf>) -> Result<()> {
     Ok(())
 }
 
-/// `dunnage seed`: the session does the copy; this prints it.
+/// `swarfr seed`: the session does the copy; this prints it.
 fn seed_into(
     from: Option<PathBuf>,
     dry_run: bool,
@@ -550,7 +550,7 @@ fn seed_into(
     print_seedings(&done, dry_run)
 }
 
-/// `dunnage worktree add`: the session adds and seeds; this says what came of each.
+/// `swarfr worktree add`: the session adds and seeds; this says what came of each.
 fn worktree_add(
     dry_run: bool,
     index: Option<PathBuf>,

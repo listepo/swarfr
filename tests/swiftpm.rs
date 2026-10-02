@@ -8,13 +8,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use dunnage::compress::Compress;
-use dunnage::dedupe::Dedupe;
-use dunnage::eco::swiftpm::{self, SWIFTPM};
-use dunnage::eco::{self, Ecosystem, Guard};
-use dunnage::engine::{self, Options};
-use dunnage::index::HashIndex;
-use dunnage::model;
+use swarfr::compress::Compress;
+use swarfr::dedupe::Dedupe;
+use swarfr::eco::swiftpm::{self, SWIFTPM};
+use swarfr::eco::{self, Ecosystem, Guard};
+use swarfr::engine::{self, Options};
+use swarfr::index::HashIndex;
+use swarfr::model;
 use tempfile::TempDir;
 
 mod common;
@@ -45,7 +45,7 @@ impl Lock {
     /// it, so a failing build leaves nothing behind either.
     fn before_build(root: &Path) -> Self {
         let scratch = root.join("app").join(swiftpm::SCRATCH);
-        Self(dunnage::sys::temp_dir().join(swiftpm::lock_name(&scratch)))
+        Self(swarfr::sys::temp_dir().join(swiftpm::lock_name(&scratch)))
     }
 }
 
@@ -130,7 +130,7 @@ fn all_units_share_one_lock_named_after_the_scratch_dir_in_the_temp_dir() {
     let lock = Lock::of(out);
     assert_eq!(
         lock.0,
-        dunnage::sys::temp_dir().join(swiftpm::lock_name(&build))
+        swarfr::sys::temp_dir().join(swiftpm::lock_name(&build))
     );
 }
 
@@ -256,9 +256,9 @@ fn after_compress_and_dedupe_swift_builds_nothing_and_the_binary_runs() {
     let report = engine::run(&units, &[&compress, &dedupe], &Options::default(), &SWIFTPM).unwrap();
 
     assert!(report.busy.is_empty(), "{report:?}");
-    if dunnage::sys::caps(&build).compress {
+    if swarfr::sys::caps(&build).compress {
         assert!(report.passes[0].applied > 0, "{report:?}");
-        if dunnage::sys::ALLOCATED_SHOWS_COMPRESSION {
+        if swarfr::sys::ALLOCATED_SHOWS_COMPRESSION {
             assert!(allocated_bytes(&build) < before, "{before}");
         }
     }

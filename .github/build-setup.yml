@@ -33,9 +33,9 @@
       exit 1
     fi
 
-    keychain="$RUNNER_TEMP/dunnage-codesign-discover.keychain-db"
+    keychain="$RUNNER_TEMP/swarfr-codesign-discover.keychain-db"
     keychain_pwd="$(openssl rand -hex 16)"
-    cert="$RUNNER_TEMP/dunnage-certificate.p12"
+    cert="$RUNNER_TEMP/swarfr-certificate.p12"
     echo "$MACOS_CERTIFICATE" | base64 --decode > "$cert"
 
     security create-keychain -p "$keychain_pwd" "$keychain"

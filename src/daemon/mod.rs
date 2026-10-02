@@ -1,4 +1,4 @@
-//! `dunnage daemon`: the passes of `dunnage run`, started when a build dir has gone cold rather
+//! `swarfr daemon`: the passes of `swarfr run`, started when a build dir has gone cold rather
 //! than by the clock. Everything it changes, it changes through [`Session::apply`] with the
 //! `Request` the config file makes; what is its own is when to call it, and the state file that
 //! `daemon status` reads. No IPC: a manual run and the daemon meet at the session's run lock.
@@ -12,11 +12,11 @@ use std::time::Duration;
 use std::{fs, thread};
 
 use anyhow::{Context, Result, ensure};
-use dunnage::compress;
-use dunnage::eco::{self, Guard};
-use dunnage::engine::{self, QUIET_MIN_AGE};
-use dunnage::session::{self, Control, Observer, Request, RunReport, Session, Settings};
 use serde::{Deserialize, Serialize};
+use swarfr::compress;
+use swarfr::eco::{self, Guard};
+use swarfr::engine::{self, QUIET_MIN_AGE};
+use swarfr::session::{self, Control, Observer, Request, RunReport, Session, Settings};
 
 /// Next to the hash index, like the run lock.
 pub const STATE_FILE: &str = "daemon.json";
@@ -234,7 +234,7 @@ impl Observer for Log {
     }
 }
 
-/// `dunnage daemon run`: in the foreground until killed, or one look with `once`.
+/// `swarfr daemon run`: in the foreground until killed, or one look with `once`.
 pub fn run(config: Option<&Path>, index: Option<PathBuf>, once: bool) -> Result<()> {
     let config = crate::load_config(config)?;
     let mut request = Request::from_config(&config);
@@ -324,7 +324,7 @@ fn span(secs: u64) -> String {
         .join(" ")
 }
 
-/// `dunnage daemon status`: the service unit, and the state file as the daemon last wrote it.
+/// `swarfr daemon status`: the service unit, and the state file as the daemon last wrote it.
 pub fn status(index: Option<PathBuf>, json: bool) -> Result<()> {
     let path = state_path(&crate::index_path(index)?);
     let text = match fs::read_to_string(&path) {

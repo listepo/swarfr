@@ -552,3 +552,16 @@ compresses and dedupes the checkout's `target/` losslessly (never deletes, keeps
 tests pass. The recipe is tolerant of machines without the tool (`command -v dunnage` guard, a
 no-op exit 0), skips a checkout with no `target/` yet, and treats dunnage's exit code 2 (a build held the lock) as success, not a failure.
 `dunnage` is installed with `ketch install dunnage`; `toolchain.md` and `AGENTS.md` note it.
+
+### T46. Rename to swarfr
+
+The project is `swarfr` now: swarf is the chips and shavings left after machining, waste that is
+not the part. The GitHub repository moved from `listepo/dunnage` to `listepo/swarfr` (GitHub
+redirects the old URL). The package, library and binary are `swarfr` (`swarfr::` in code,
+`cargo swarfr` through a `cargo-swarfr` link), and so are the config file
+(`~/.config/swarfr/config.toml`), the hash index (`~/.cache/swarfr/hashes-v1.bin`), the
+temporary-file prefix (`.swarfr-tmp-`), the launchd label (`dev.swarfr.daemon`), the systemd
+unit (`swarfr.service`), the log (`~/Library/Logs/swarfr.log`) and the release assets. The tool
+read no environment variables of its own, so there is no old name to keep as a fallback. Nothing
+migrates by itself: a v0.1.0 install keeps its `dunnage` paths until they are moved or removed
+by hand. The entries above keep the old name; they describe what was done then.

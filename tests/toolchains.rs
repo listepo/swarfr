@@ -10,7 +10,7 @@ use std::time::{Duration, SystemTime};
 use serde_json::Value;
 
 mod common;
-use common::{Fixture, dunnage};
+use common::{Fixture, swarfr};
 
 /// Fingerprint JSON files of the target, sorted, oldest-looking first.
 fn fingerprints(profile: &Path) -> Vec<PathBuf> {
@@ -44,7 +44,7 @@ fn age_out(files: &[PathBuf], count: usize) {
 fn status_json(fixture: &Fixture) -> Value {
     let config_home = fixture.root.join("config-home");
     fs::create_dir_all(&config_home).unwrap();
-    let out = dunnage(&config_home)
+    let out = swarfr(&config_home)
         .args(["status", "--json"])
         .arg(&fixture.root)
         .output()
@@ -106,7 +106,7 @@ fn advise_names_the_target_and_says_what_it_would_take() {
     let config_home = fixture.root.join("config-home");
     fs::create_dir_all(&config_home).unwrap();
 
-    let out = dunnage(&config_home)
+    let out = swarfr(&config_home)
         .args(["advise", "--json"])
         .arg(&fixture.root)
         .output()

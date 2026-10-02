@@ -5,7 +5,7 @@ use std::path::Path;
 use tempfile::TempDir;
 
 mod common;
-use common::{Fixture, dunnage};
+use common::{Fixture, swarfr};
 
 /// `run --json` with every file old enough, over the fixture's workspace.
 ///
@@ -14,7 +14,7 @@ use common::{Fixture, dunnage};
 /// workspace (`docs/bench.md`); `tests/engine.rs` shows the rounds themselves, this that a whole
 /// run ends settled and fresh.
 fn run(fx: &Fixture, index: &Path, config_home: &Path, extra: &[&str]) -> serde_json::Value {
-    let out = dunnage(config_home)
+    let out = swarfr(config_home)
         .args(["run", "--json", "--min-age", "0", "--index"])
         .arg(index)
         .args(extra)

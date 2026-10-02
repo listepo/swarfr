@@ -2,7 +2,7 @@
 
 Not approved. Nothing here moves to `roadmap.md` or `plan.md` without the creator's approval.
 
-Moved out by the creator's word. Into `plan.md`: `dunnage worktree add` (T26), other build
+Moved out by the creator's word. Into `plan.md`: `swarfr worktree add` (T26), other build
 systems (T28–T33, T35), watch mode — now the daemon (T34) — and the monorepo behaviors
 (T37–T39). Into `roadmap.md`: publishing (R7). Already done and dropped from this list: the
 Linux backend (T20) and ReFS cloning as a Windows backend (part of T21).
@@ -49,7 +49,7 @@ call, as the T34 card says.
 ## Daemon: stop cleanly on SIGTERM
 
 `launchctl bootout` and `systemctl stop` send SIGTERM, which kills the daemon mid-action; every
-action is whole, so the cost is leftover `.dunnage-tmp-*` files the next run removes. Raising
+action is whole, so the cost is leftover `.swarfr-tmp-*` files the next run removes. Raising
 `Control::stop` from the signal needs `signal-hook` or `ctrlc` (a new dependency) or `unsafe`
 FFI.
 
@@ -61,6 +61,6 @@ target dir, rustc's `deps/*.d` are relative to the workspace root, fingerprints 
 package-relative, and only `.rmeta` and object debug info name the workspace. Its profile dirs
 also carry `.cargo-build-lock`, not `.cargo-lock` (cargo 1.97), so `profile_dirs` finds no unit
 in one today. Options: pair it with the target dir that holds the absolute dep-info for the same
-units; a record dunnage writes when `seed`, `worktree add` or the daemon sees a build dir used from
+units; a record swarfr writes when `seed`, `worktree add` or the daemon sees a build dir used from
 a workspace; `[owners]` in the config; the build-dir templates (`{workspace-path-hash}`) resolved
 against known workspaces.

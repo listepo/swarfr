@@ -1,4 +1,4 @@
-//! `dunnage worktree add` on a small git repository. Everything is in temp dirs.
+//! `swarfr worktree add` on a small git repository. Everything is in temp dirs.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -8,7 +8,7 @@ use predicates::str::contains;
 use tempfile::TempDir;
 
 mod common;
-use common::{dunnage, git, stale_units_at};
+use common::{git, stale_units_at, swarfr};
 
 const EXIT_FAILURE: i32 = 1;
 
@@ -111,11 +111,11 @@ impl Repo {
         self.tmp.path().canonicalize().unwrap().join(name)
     }
 
-    /// `dunnage worktree add`, run from the workspace — a subdir of the checkout, so the new
+    /// `swarfr worktree add`, run from the workspace — a subdir of the checkout, so the new
     /// worktree is seeded at `<worktree>/ws`.
     fn add(&self, extra: &[&str], git_args: &[&str]) -> assert_cmd::assert::Assert {
         let state = self.tmp.path().join("state");
-        dunnage(&state)
+        swarfr(&state)
             .current_dir(self.root.join("ws"))
             .args(["worktree", "add", "--index"])
             .arg(state.join("hashes.bin"))
@@ -205,7 +205,7 @@ fn from_the_checkout_root_every_workspace_is_seeded_and_fresh() {
     let worktree = repo.worktree("both");
     let state = repo.tmp.path().join("state");
 
-    dunnage(&state)
+    swarfr(&state)
         .current_dir(&repo.root)
         .args(["worktree", "add", "--index"])
         .arg(state.join("hashes.bin"))
