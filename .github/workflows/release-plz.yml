@@ -1,16 +1,15 @@
-# T43. A second way in: release-plz keeps a "release: vX.Y.Z" pull request open on main
-# with the next version and the changelog; merging it starts the dist Release workflow through
-# the same scripts/release.sh as bump.yml. Nobody types a version: patch unless a commit since the
-# last tag says feat (minor) or breaking (major), and the first release keeps the 0.1.0 in
-# Cargo.toml.
+# T43. A second way in: release-plz keeps a "release: vX.Y.Z" pull request open on main with the
+# next version and the changelog; merging it runs verify (`just check` and the cross check, on
+# Linux and macOS) on the merge commit and then dispatches the dist Release workflow
+# (release.yml, `tag=vX.Y.Z`), the same dispatch as scripts/release.sh. The flow lives in
+# listepo/infra (release-plz.yml).
 #
 # release-plz creates neither the tag nor the GitHub Release — dist does both from release.yml —
 # and reads the tag dist pushes to learn that a version is out (`git_only` in release-plz.toml).
 #
 # RELEASE_PLZ_TOKEN (a fine-grained PAT: contents + pull requests, write) is required, not
 # optional: GitHub starts no workflow from a GITHUB_TOKEN event, so a pull request opened with the
-# default token would be merged having never run ci.yml. `release-pr` checks for it and fails
-# loudly.
+# default token would be merged having never run ci.yml.
 name: release-plz
 
 on:
@@ -18,89 +17,22 @@ on:
     branches: [main]
 
 permissions:
-  contents: write # the release branch
-  pull-requests: write # the release PR
-  actions: write # dispatch release.yml after the merge
-
-concurrency:
-  group: release-plz
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  # Is this push the merge of a release PR? Only a line that *is* the PR title counts — the
-  # squash title, or the title line GitHub adds to a merge commit — never a mention inside a
-  # sentence (`contains()` is not line-anchored, an anchored regex is; rtok once dispatched a
-  # release from a commit body that only mentioned "release: vX.Y.Z").
-  #
-  # The optional " (#123)" is GitHub's own doing: squashing appends the pull request number to the
-  # title — "release: v0.1.0 (#3)" — which a bare `grep -x` would miss, and the merge would
-  # release nothing at all.
-  gate:
-    runs-on: ubuntu-latest
-    outputs:
-      merged: ${{ steps.check.outputs.merged }}
-    steps:
-      - uses: actions/checkout@v7
-      - id: check
-        run: |
-          if git log -1 --format=%B | grep -qE '^release: v[0-9]+\.[0-9]+\.[0-9]+( \(#[0-9]+\))?$'; then
-            echo "merged=true" >>"$GITHUB_OUTPUT"
-          else
-            echo "merged=false" >>"$GITHUB_OUTPUT"
-          fi
-
-  release-pr:
-    # The merge of the release PR itself has nothing new to propose.
-    needs: gate
-    if: needs.gate.outputs.merged != 'true'
-    runs-on: ubuntu-latest
-    steps:
-      # Without the token, `release-plz/action` still opens the pull request — with
-      # GITHUB_TOKEN, whose events GitHub refuses to start workflows from. The pull request then
-      # carries no CI at all, and the only sign is a checks list that is empty rather than red.
-      # Fail here, where the cause is written down. https://release-plz.dev/docs/github/token
-      - name: A token that gives the release pull request its CI
-        env:
-          TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
-        run: |
-          if [ -z "$TOKEN" ]; then
-            echo "RELEASE_PLZ_TOKEN is not set." >&2
-            echo "A pull request opened with the default GITHUB_TOKEN starts no workflows," >&2
-            echo "so the release would be merged without ci.yml ever having run on it." >&2
-            echo "Set a fine-grained PAT with contents + pull-requests write." >&2
-            echo "See https://release-plz.dev/docs/github/token" >&2
-            exit 1
-          fi
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0 # tags and history decide the next version
-      # cargo from mise.toml, same as local and ci.yml
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
-      - uses: release-plz/action@b8d6b54b02889ff2ae2bb82e8b57c3a8fc1683a5 # v0.5.139
-        with:
-          command: release-pr
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
-
-  # The same gate every pull request passes, on the merge commit this release is cut from.
-  verify:
-    needs: gate
-    if: needs.gate.outputs.merged == 'true'
-    uses: ./.github/workflows/verify.yml
-
-  # Not on crates.io (R7); the release goes straight to dist.
-  release:
-    # Merge or squash: both carry the PR title "release: vX.Y.Z" as its own line.
-    needs: [gate, verify]
-    if: needs.gate.outputs.merged == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-      - name: Start the dist Release workflow for the merged version
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # --no-bump: dispatch the version Cargo.toml already carries; never raise it here.
-        run: scripts/release.sh patch --no-bump
+  release-plz:
+    uses: listepo/infra/.github/workflows/release-plz.yml@189816ac5a375e18e0235044970efcbc40e3cabd
+    permissions:
+      contents: write # the release branch
+      pull-requests: write # the release PR
+      actions: write # dispatch release.yml after the merge
+    with:
+      package: dunnage
+      # Not on crates.io (R7); the release goes straight to dist.
+      verify-command: |
+        just check
+        rustup target add --toolchain "$(rustc --version --verbose | sed -n 's/^release: //p')" \
+          x86_64-unknown-linux-gnu x86_64-pc-windows-msvc
+        just check-cross
+    secrets:
+      RELEASE_PLZ_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
