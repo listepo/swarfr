@@ -6,7 +6,6 @@ Notes for coding agents working in this repository.
 
 - The human is the only author. No agent adds a Co-Authored-By trailer, a "Generated with …" line
   or itself as author to a commit, merge or PR.
-- English for repository files: code, comments, docs, commits, PR text.
 - If a directory above this repository contains an `AGENTS.md` or `CLAUDE.md`, follow it too. If it
   conflicts with this file, ask the creator.
 - **Config files.** A config file this project owns has a schema generated from its types (Rust: `schemars`), committed and checked by a drift test, and one module owns all config loading, validation and editing. A config file another program owns (an agent host's or an editor's) gets no schema from us: check only our own entry in it and leave the rest byte-for-byte, comments included.
