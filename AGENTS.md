@@ -6,7 +6,6 @@ Notes for coding agents working in this repository.
 
 - The human is the only author. No agent adds a Co-Authored-By trailer, a "Generated with …" line
   or itself as author to a commit, merge or PR.
-- English for repository files: code, comments, docs, commits, PR text.
 - If a directory above this repository contains an `AGENTS.md` or `CLAUDE.md`, follow it too. If it
   conflicts with this file, ask the creator.
 - **Config files.** A config file this project owns has a schema generated from its types (Rust: `schemars`), committed and checked by a drift test, and one module owns all config loading, validation and editing. A config file another program owns (an agent host's or an editor's) gets no schema from us: check only our own entry in it and leave the rest byte-for-byte, comments included.
@@ -41,7 +40,6 @@ the contract. Measurements that justify the design are in `docs/research.md`.
 - Tasks live in `plan.md` (table + cards), mirrored in `todo.md`; finished tasks move whole to
   `done.md`. Claim a task in the table before starting and write the execution plan into its card.
 - Version-gated work lives in `roadmap.md`; re-check the cargo changelog before moving an item.
-- New dependencies need the creator's approval; candidates are listed in `DESIGN.md`. Keep
-  `toolchain.md` in sync with the manifest.
+- Dependency candidates are listed in `DESIGN.md`.
 - macOS / APFS is the only supported platform for 0.x; keep platform calls behind the backend
   boundary described in `DESIGN.md`.
