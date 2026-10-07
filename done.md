@@ -574,3 +574,9 @@ packages by name, so the T43 pipeline could not open its pull request ("package 
 found"). Found by the 2026-10-07 audit. Fix: the input now says `swarfr`.
 Model: ZCode / GLM-5.3 · Status: done 2026-10-07 · Priority: P1 · Complexity: 1 · Files: `.github/workflows/release-plz.yml`
 Check: the only `dunnage` reference under `.github/` and `release-plz.toml` on this branch; yaml reviewed by hand (no compile involved).
+
+### T50. Broken line continuations in the advise note
+
+`src/eco/cargo/advise.rs` built the stale-toolchain note from a multi-line string literal that had lost its `\` continuations, so `swarfr advise` printed the sentence with ~18-space gaps wherever a line had wrapped ("…the one cargo uses                  here…"). Every other continuation in the file was intact. Found by the 2026-10-07 audit. Fix: the literal carries proper `\` continuations again.
+Model: ZCode / GLM-5.3 · Status: done 2026-10-07 · Priority: P3 · Complexity: 1 · Files: `src/eco/cargo/advise.rs`
+Check: `cargo test --test advise --test toolchains` — 5 + 3 passed (the toolchains test asserts the note's text).

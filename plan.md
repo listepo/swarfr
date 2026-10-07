@@ -17,7 +17,6 @@ and `dunnage` until T46. Design in `DESIGN.md`, measurements in `docs/research.m
 | T32.1 | todo | P2 | 2 | 0% | |
 | T48 | todo | P1 | 3 | 0% | |
 | T49 | todo | P2 | 2 | 0% | |
-| T50 | todo | P3 | 1 | 0% | |
 | T51 | todo | P2 | 2 | 0% | |
 | T52 | todo | P3 | 2 | 0% | |
 
@@ -173,10 +172,6 @@ pass. Needs the creator's approval to install `ninja` and `meson` (brew or mise)
 ### T49. Windows lossy passes: README claim vs the held .cargo-lock
 
 README:9-10 says Windows "builds and reports but plans no work", but `orphans`/`evict`/`incremental`/`doc` are not gated on `caps` and plan removals on any platform; and while the engine holds the `.cargo-lock` `File` open (`engine.rs:359`, dropped only at `engine.rs:509`), `remove()` (`engine.rs:245`) deletes the profile dir containing that lock — on Windows a delete-pending open file keeps its directory entry, so the removal fails and the pass reports it skipped. Done means: the README matches reality (lossy passes either work on Windows or are gated off), and the lock is released before destructive removals or the failure is handled deliberately.
-
-### T50. Broken line continuations in the advise note
-
-`src/eco/cargo/advise.rs:209-213`: the multi-line string literal lost its `\` continuations, so the user-visible note prints with ~18-space gaps mid-sentence. Done means: the note renders as one flowing sentence.
 
 ### T51. Align the git-toplevel helper with git-changed-paths
 
