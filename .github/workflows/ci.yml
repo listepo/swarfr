@@ -1,5 +1,5 @@
 # T43. The gate on every pull request, and on main after a merge. Rust CI comes from the shared
-# listepo/infra ci-rust.yml (pinned by commit, Rust from mise.toml with a rustc pin check):
+# pyrlyn/ci ci-rust.yml (pinned by commit, Rust from mise.toml with a rustc pin check):
 # fmt once, then per target clippy, check and the tests (`just check`'s steps) where the runner
 # executes the target, or a build where it does not. `cross` keeps the Windows type-check: the
 # suite runs on Windows only in a local VM (T24), so the tests do not build there.
@@ -29,7 +29,10 @@ jobs:
   rust:
     # Draft pull requests still emit `synchronize`; skip until ready_for_review.
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    uses: listepo/infra/.github/workflows/ci-rust.yml@189816ac5a375e18e0235044970efcbc40e3cabd
+    uses: pyrlyn/ci/.github/workflows/ci-rust.yml@c875cd763ad0c4abbd936e480be5752330d3b66b # main 2026-10-07
+    permissions:
+      contents: read
+      actions: write # cancel-run on failure, required by pyrlyn/ci ci-rust.yml
     with:
       # The shared matrix minus Windows (type-checked by `cross` below).
       matrix: >-
