@@ -565,3 +565,12 @@ unit (`swarfr.service`), the log (`~/Library/Logs/swarfr.log`) and the release a
 read no environment variables of its own, so there is no old name to keep as a fallback. Nothing
 migrates by itself: a v0.1.0 install keeps its `dunnage` paths until they are moved or removed
 by hand. The entries above keep the old name; they describe what was done then.
+
+### T47. release-plz still targeted the old crate name `dunnage`
+
+`.github/workflows/release-plz.yml` passed `package: dunnage` to the shared release-plz workflow
+while the crate is `swarfr` since T46; with `git_only = true` the release-PR flow resolves
+packages by name, so the T43 pipeline could not open its pull request ("package dunnage not
+found"). Found by the 2026-10-07 audit. Fix: the input now says `swarfr`.
+Model: ZCode / GLM-5.3 · Status: done 2026-10-07 · Priority: P1 · Complexity: 1 · Files: `.github/workflows/release-plz.yml`
+Check: the only `dunnage` reference under `.github/` and `release-plz.toml` on this branch; yaml reviewed by hand (no compile involved).

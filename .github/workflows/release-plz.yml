@@ -27,7 +27,7 @@ jobs:
       pull-requests: write # the release PR
       actions: write # dispatch release.yml after the merge
     with:
-      package: dunnage
+      package: swarfr
       # Not on crates.io (R7); the release goes straight to dist.
       verify-command: |
         just check

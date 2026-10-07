@@ -15,6 +15,11 @@ and `dunnage` until T46. Design in `DESIGN.md`, measurements in `docs/research.m
 | T21 | todo | P2 | 5 | 0% | |
 | T30.1 | todo | P2 | 3 | 0% | |
 | T32.1 | todo | P2 | 2 | 0% | |
+| T48 | todo | P1 | 3 | 0% | |
+| T49 | todo | P2 | 2 | 0% | |
+| T50 | todo | P3 | 1 | 0% | |
+| T51 | todo | P2 | 2 | 0% | |
+| T52 | todo | P3 | 2 | 0% | |
 
 Blockers, take these first. **T24** blocks T21: nothing on Windows can be tested without it.
 
@@ -160,3 +165,23 @@ generator only, because `ninja` and `meson` are not installed here. Settle wheth
 Ninja takes a lock on the build dir, claim Meson build dirs (`meson-private/`, whose
 `coredata.dat` records the source dir), and add the oracle `ninja -n` plans nothing after a
 pass. Needs the creator's approval to install `ninja` and `meson` (brew or mise).
+
+### T48. macOS caps() overclaims clone/compress on non-APFS volumes
+
+`src/sys/macos.rs:62-74` returns `clone: true, compress: true` after only a write test — no `fclonefileat` probe (unlike `unix.rs`'s FICLONE probe) — and `clone_file` is `fs::copy` (`macos.rs:92-94`), which silently byte-copies. On HFS+/exFAT/SMB/FAT volumes, dedupe plans Replace actions whose "clones" are full copies: nothing is freed, disk briefly grows, and `freed_bytes`/`applied` are wrongly reported (`engine.rs:458-465`); the clone contract test (`sys/mod.rs:152-171`) is vacuous there. This contradicts the invariant at `sys/mod.rs:5-7`. Done means: `caps()` probes `fclonefileat` like unix.rs probes FICLONE, and the non-clone path reports honestly.
+
+### T49. Windows lossy passes: README claim vs the held .cargo-lock
+
+README:9-10 says Windows "builds and reports but plans no work", but `orphans`/`evict`/`incremental`/`doc` are not gated on `caps` and plan removals on any platform; and while the engine holds the `.cargo-lock` `File` open (`engine.rs:359`, dropped only at `engine.rs:509`), `remove()` (`engine.rs:245`) deletes the profile dir containing that lock — on Windows a delete-pending open file keeps its directory entry, so the removal fails and the pass reports it skipped. Done means: the README matches reality (lossy passes either work on Windows or are gated off), and the lock is released before destructive removals or the failure is handled deliberately.
+
+### T50. Broken line continuations in the advise note
+
+`src/eco/cargo/advise.rs:209-213`: the multi-line string literal lost its `\` continuations, so the user-visible note prints with ~18-space gaps mid-sentence. Done means: the note renders as one flowing sentence.
+
+### T51. Align the git-toplevel helper with git-changed-paths
+
+`src/session.rs:520` (+ the `git()` helper at `session.rs:883-899`) duplicates the repo-top discovery that `packages/crates`'s `git-changed-paths` implements better: `GIT_OPTIONAL_LOCKS=0`, "git missing" distinguished from spawn failure, strict UTF-8 (swarfr uses lossy and maps every failure to `Error::Invalid`). A third copy sits in `scoped-check/src/main.rs:92-104`. Done means: swarfr's helper matches the hardened semantics now, and the three copies are consolidated once a shared crate is published (coordinate with crates-packages T6).
+
+### T52. Small fixes: seed mtimes, advise --cargo-home, badge, Session::run split
+
+`src/seed.rs:239-241` byte-copies without restoring mtimes while the clone path and every engine replacement preserve them (`engine.rs:827-844` — cargo rebuild avoidance); `advise` hardcodes the default cargo home (`main.rs:510`) while `status`/`run` take `--cargo-home` (`main.rs:62-69`); README:3 sonarcloud badges still say `listepo_dunnage`; `Session::run` (`session.rs:549-847`, ~300 lines) mixes validation, resolution, pass construction and reporting — extract the pass-construction block (`session.rs:633-694`). Done means: all four addressed.
