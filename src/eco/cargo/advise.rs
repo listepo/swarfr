@@ -206,7 +206,10 @@ pub fn notes(targets: &[Target]) -> Vec<Note> {
         add(
             target.root.display().to_string(),
             format!(
-                "{} of {units} units were built by a rustc that is no longer the one cargo uses                  here, about {:.1} GiB: nothing reclaims them short of `cargo clean`, because                  finding a unit's files means parsing hashed file names, which this tool does                  not do",
+                "{} of {units} units were built by a rustc that is no longer the one cargo uses \
+                 here, about {:.1} GiB: nothing reclaims them short of `cargo clean`, because \
+                 finding a unit's files means parsing hashed file names, which this tool does \
+                 not do",
                 target.stale_units,
                 target.stale_bytes_estimate as f64 / GIB as f64
             ),
