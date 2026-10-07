@@ -880,12 +880,22 @@ impl Session {
 }
 
 /// `git <args>` in `dir`, its stdout on success. On failure git's own words are the error.
+///
+/// The semantics `git-changed-paths` (packages/crates) already carries, so the
+/// three copies do not drift apart while they exist: read-only queries never
+/// take the index lock, a missing git is its own answer, and the output must
+/// be UTF-8 rather than silently lossy.
 fn git(dir: &Path, args: &[OsString]) -> Result<String> {
-    let out = Command::new("git")
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .map_err(Error::at("running git"))?;
+    let out = git_command(dir, args).output().map_err(|source| {
+        if source.kind() == std::io::ErrorKind::NotFound {
+            Error::Invalid("git is not installed; swarfr shells out to it".into())
+        } else {
+            Error::At {
+                at: "running git".into(),
+                source,
+            }
+        }
+    })?;
     if !out.status.success() {
         let said = String::from_utf8_lossy(&out.stderr);
         let args: Vec<_> = args.iter().map(|arg| arg.to_string_lossy()).collect();
@@ -895,7 +905,54 @@ fn git(dir: &Path, args: &[OsString]) -> Result<String> {
             said.trim()
         )));
     }
-    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    String::from_utf8(out.stdout).map_err(|_| {
+        let args: Vec<_> = args.iter().map(|arg| arg.to_string_lossy()).collect();
+        Error::Invalid(format!(
+            "git {} printed output that is not UTF-8",
+            args.join(" ")
+        ))
+    })
+}
+
+/// The command `git` runs with, split out so the invariant below can be
+/// pinned by a test.
+fn git_command(dir: &Path, args: &[OsString]) -> Command {
+    let mut cmd = Command::new("git");
+    cmd.current_dir(dir).args(args);
+    // Read-only queries (rev-parse, worktree list) must not take the index
+    // lock: a concurrent `git add` or `git status` is never disturbed.
+    cmd.env("GIT_OPTIONAL_LOCKS", "0");
+    cmd
+}
+
+#[cfg(test)]
+mod git_tests {
+    use super::*;
+
+    #[test]
+    fn the_git_helper_never_takes_the_index_lock() {
+        let cmd = git_command(Path::new("."), &["status".into()]);
+        let lock = cmd
+            .get_envs()
+            .find(|(key, _)| key.to_str() == Some("GIT_OPTIONAL_LOCKS"));
+        assert_eq!(
+            lock.and_then(|(_, value)| value.and_then(|value| value.to_str())),
+            Some("0"),
+            "GIT_OPTIONAL_LOCKS=0 must be pinned on every git call"
+        );
+    }
+
+    #[test]
+    fn git_output_is_strict_utf8() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(git(dir.path(), &["init".into()]).is_ok());
+        let top =
+            git(dir.path(), &["rev-parse".into(), "--show-toplevel".into()]).expect("git answers");
+        assert!(
+            top.ends_with('\n') && Path::new(top.trim_end()).is_absolute(),
+            "raw stdout, trimmed only by callers: {top:?}"
+        );
+    }
 }
 
 /// Every worktree of the repository `dir` is in, canonical.

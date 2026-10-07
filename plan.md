@@ -17,7 +17,6 @@ and `dunnage` until T46. Design in `DESIGN.md`, measurements in `docs/research.m
 | T32.1 | todo | P2 | 2 | 0% | |
 | T48 | todo | P1 | 3 | 0% | |
 | T49 | todo | P2 | 2 | 0% | |
-| T51 | todo | P2 | 2 | 0% | |
 | T53 | todo | P3 | 2 | 0% | |
 
 Blockers, take these first. **T24** blocks T21: nothing on Windows can be tested without it.
@@ -172,10 +171,6 @@ pass. Needs the creator's approval to install `ninja` and `meson` (brew or mise)
 ### T49. Windows lossy passes: README claim vs the held .cargo-lock
 
 README:9-10 says Windows "builds and reports but plans no work", but `orphans`/`evict`/`incremental`/`doc` are not gated on `caps` and plan removals on any platform; and while the engine holds the `.cargo-lock` `File` open (`engine.rs:359`, dropped only at `engine.rs:509`), `remove()` (`engine.rs:245`) deletes the profile dir containing that lock — on Windows a delete-pending open file keeps its directory entry, so the removal fails and the pass reports it skipped. Done means: the README matches reality (lossy passes either work on Windows or are gated off), and the lock is released before destructive removals or the failure is handled deliberately.
-
-### T51. Align the git-toplevel helper with git-changed-paths
-
-`src/session.rs:520` (+ the `git()` helper at `session.rs:883-899`) duplicates the repo-top discovery that `packages/crates`'s `git-changed-paths` implements better: `GIT_OPTIONAL_LOCKS=0`, "git missing" distinguished from spawn failure, strict UTF-8 (swarfr uses lossy and maps every failure to `Error::Invalid`). A third copy sits in `scoped-check/src/main.rs:92-104`. Done means: swarfr's helper matches the hardened semantics now, and the three copies are consolidated once a shared crate is published (coordinate with crates-packages T6).
 
 ### T53. Split Session::run's pass construction out of the method
 
