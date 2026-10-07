@@ -3,3 +3,8 @@
 - T21. Windows: NTFS compression and ReFS block cloning
 - T30.1. Swift: Xcode DerivedData
 - T32.1. C and C++: Ninja and Meson
+- T48. macOS caps() overclaims clone/compress on non-APFS volumes
+- T49. Windows lossy passes: README claim vs the held .cargo-lock
+- T50. Broken line continuations in the advise note
+- T51. Align the git-toplevel helper with git-changed-paths
+- T52. Small fixes: seed mtimes, advise --cargo-home, badge, Session::run split
