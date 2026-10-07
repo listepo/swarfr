@@ -1,15 +1,17 @@
-# T43. A second way in: release-plz keeps a "release: vX.Y.Z" pull request open on main with the
-# next version and the changelog; merging it runs verify (`just check` and the cross check, on
-# Linux and macOS) on the merge commit and then dispatches the dist Release workflow
-# (release.yml, `tag=vX.Y.Z`), the same dispatch as scripts/release.sh. The flow lives in
-# listepo/infra (release-plz.yml).
+# T43. release-plz keeps a "release: vX.Y.Z" pull request open on main with the next version and
+# the changelog, through the shared pyrlyn/ci release-plz.yml. It never releases: merging the
+# release PR tags nothing and dispatches nothing. The release itself is Actions -> Bump and
+# release (bump.yml), which releases the version in Cargo.toml when it is not tagged yet, so
+# after merging a release PR run Bump and release to ship it (docs/release.md).
 #
-# release-plz creates neither the tag nor the GitHub Release — dist does both from release.yml —
-# and reads the tag dist pushes to learn that a version is out (`git_only` in release-plz.toml).
+# The shared workflow holds the PR back while the current version has no tag (a release in
+# flight). release-plz.toml keeps git_tag_enable and git_release_enable off: dist creates the tag
+# and the GitHub Release.
 #
 # RELEASE_PLZ_TOKEN (a fine-grained PAT: contents + pull requests, write) is required, not
 # optional: GitHub starts no workflow from a GITHUB_TOKEN event, so a pull request opened with the
 # default token would be merged having never run ci.yml.
+# Inputs, secrets and permissions: https://github.com/pyrlyn/ci/blob/main/docs/reusable-workflows.md
 name: release-plz
 
 on:
@@ -21,18 +23,13 @@ permissions:
 
 jobs:
   release-plz:
-    uses: listepo/infra/.github/workflows/release-plz.yml@189816ac5a375e18e0235044970efcbc40e3cabd
+    uses: pyrlyn/ci/.github/workflows/release-plz.yml@c875cd763ad0c4abbd936e480be5752330d3b66b # main 2026-10-07
     permissions:
       contents: write # the release branch
       pull-requests: write # the release PR
-      actions: write # dispatch release.yml after the merge
+      actions: write # cancel-run on failure
+      issues: write # notify-failure: a failed run opens a release-failure issue
     with:
       package: swarfr
-      # Not on crates.io (R7); the release goes straight to dist.
-      verify-command: |
-        just check
-        rustup target add --toolchain "$(rustc --version --verbose | sed -n 's/^release: //p')" \
-          x86_64-unknown-linux-gnu x86_64-pc-windows-msvc
-        just check-cross
     secrets:
       RELEASE_PLZ_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
