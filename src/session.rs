@@ -176,18 +176,20 @@ impl Request {
                 .family
                 .iter()
                 .filter(|(_, family)| family.skip)
-                .map(|(dir, _)| dir.clone())
+                .map(|(dir, _)| crate::sys::plain(dir))
                 .collect(),
             skip_paths: config
                 .family
                 .iter()
                 .filter(|(_, family)| !family.skip_paths.is_empty())
-                .map(|(dir, family)| (dir.clone(), family.skip_paths.clone()))
+                .map(|(dir, family)| (crate::sys::plain(dir), family.skip_paths.clone()))
                 .collect(),
             family_ecosystems: config
                 .family
                 .iter()
-                .filter_map(|(dir, family)| Some((dir.clone(), family.ecosystems.clone()?)))
+                .filter_map(|(dir, family)| {
+                    Some((crate::sys::plain(dir), family.ecosystems.clone()?))
+                })
                 .collect(),
             ..Self::default()
         }
@@ -238,11 +240,11 @@ impl Request {
     /// and its adapter is one the family allows. A skipped build dir is left out before the lossy
     /// passes choose, so it is neither touched nor counted.
     pub fn keeps(&self, target: &Target) -> bool {
-        let family = target.family.as_ref().unwrap_or(&target.root);
-        if self.skip_families.contains(family) {
+        let family = crate::sys::plain(target.family.as_ref().unwrap_or(&target.root));
+        if self.skip_families.iter().any(|skipped| skipped == &family) {
             return false;
         }
-        let skipped = self.skip_paths.get(family).is_some_and(|prefixes| {
+        let skipped = self.skip_paths.get(&family).is_some_and(|prefixes| {
             target
                 .position
                 .as_ref()
@@ -250,7 +252,7 @@ impl Request {
         });
         let allowed = self
             .family_ecosystems
-            .get(family)
+            .get(&family)
             .is_none_or(|names| names.iter().any(|name| name == target.ecosystem));
         !skipped && allowed
     }
@@ -880,10 +882,23 @@ impl Session {
 }
 
 /// `git <args>` in `dir`, its stdout on success. On failure git's own words are the error.
+/// Absolute paths lose a `\\?\` prefix first: git on Windows rewrites it to `//?/` and refuses it.
 fn git(dir: &Path, args: &[OsString]) -> Result<String> {
+    let dir = crate::sys::plain(dir);
+    let args: Vec<OsString> = args
+        .iter()
+        .map(|arg| {
+            let path = Path::new(arg);
+            if path.is_absolute() {
+                crate::sys::plain(path).into_os_string()
+            } else {
+                arg.clone()
+            }
+        })
+        .collect();
     let out = Command::new("git")
-        .current_dir(dir)
-        .args(args)
+        .current_dir(&dir)
+        .args(&args)
         .output()
         .map_err(Error::at("running git"))?;
     if !out.status.success() {

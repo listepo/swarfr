@@ -76,6 +76,9 @@ impl Ecosystem for Cargo {
             .or(roots.first())
             .cloned()
             .unwrap_or_else(|| above.to_path_buf());
+        // Dep-info paths have no `\\?\` prefix. The rest of the inventory is canonical, and
+        // the family has to be the same path either way.
+        let project = project.canonicalize().unwrap_or(project);
         Some(Owner { project })
     }
 

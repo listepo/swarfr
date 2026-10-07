@@ -2,7 +2,7 @@
 $ swarfr status --help
 List cargo target dirs under the roots: real size, families, what the passes could win
 
-Usage: swarfr status [OPTIONS] [ROOT]...
+Usage: swarfr[EXE] status [OPTIONS] [ROOT]...
 
 Arguments:
   [ROOT]...  Dirs to search; a target dir itself works too [default: .]

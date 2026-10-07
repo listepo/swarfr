@@ -2,7 +2,6 @@
 
 use std::fs::{self, File};
 use std::io::Write;
-use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "macos")]
 use std::process::Command;
@@ -22,6 +21,7 @@ mod common;
 use common::{BIN, BUILD_SLEEP_ENV, Fixture, POLL, ino, run_unbusy};
 
 const CONTENT: &[u8] = b"same bytes in both files";
+#[cfg(unix)]
 const MEMBER_MODE: u32 = 0o640;
 const OLD_MTIME: Duration = Duration::from_secs(1_000_000_000);
 
@@ -87,9 +87,12 @@ fn profile() -> (TempDir, PathBuf) {
     fs::write(dir.join("canon"), CONTENT).unwrap();
     let member = dir.join("deps/member");
     fs::write(&member, CONTENT).unwrap();
-    fs::set_permissions(&member, fs::Permissions::from_mode(MEMBER_MODE)).unwrap();
-    let mtime = SystemTime::UNIX_EPOCH + OLD_MTIME;
-    File::open(&member).unwrap().set_modified(mtime).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&member, fs::Permissions::from_mode(MEMBER_MODE)).unwrap();
+    }
+    common::set_mtime(&member, SystemTime::UNIX_EPOCH + OLD_MTIME);
     (tmp, dir)
 }
 
@@ -121,7 +124,11 @@ fn replaces_whole_hardlink_group_and_keeps_mtime_and_mode() {
     );
     let meta = fs::metadata(&member).unwrap();
     assert_eq!(meta.modified().unwrap(), SystemTime::UNIX_EPOCH + OLD_MTIME);
-    assert_eq!(meta.mode() & 0o7777, MEMBER_MODE);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        assert_eq!(meta.mode() & 0o7777, MEMBER_MODE);
+    }
     assert_eq!(fs::read(&member).unwrap(), CONTENT);
     assert!(model::scan(&dir, &CARGO).unwrap().stale_temps.is_empty());
 }
@@ -137,11 +144,16 @@ fn a_link_puts_the_group_on_one_inode_and_keeps_the_later_mtime() {
     let link = dir.join("member-link");
     fs::hard_link(&member, &link).unwrap();
     // One inode carries one mode, so the engine only links files that already agree on it.
-    let mode = fs::metadata(&canon).unwrap().mode() & 0o7777;
-    fs::set_permissions(&member, fs::Permissions::from_mode(mode)).unwrap();
+    // Windows has no mode bits; both names already agree.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = fs::metadata(&canon).unwrap().mode() & 0o7777;
+        fs::set_permissions(&member, fs::Permissions::from_mode(mode)).unwrap();
+    }
     // And the member is the newer of the two here, so its time is the one that must survive.
     let newer = SystemTime::now() + Duration::from_secs(600);
-    File::open(&member).unwrap().set_modified(newer).unwrap();
+    common::set_mtime(&member, newer);
 
     let pass = FnPass {
         lossy: false,
@@ -166,9 +178,12 @@ fn a_link_puts_the_group_on_one_inode_and_keeps_the_later_mtime() {
 }
 
 /// Modes are not negotiable: the fixture's member is `0o640` and `canon` is not, and one inode
-/// cannot hold both. Nothing is linked and nothing is touched.
+/// cannot hold both. Nothing is linked and nothing is touched. Windows stores no mode bits, so
+/// the two names already agree and this refusal has nothing to refuse.
+#[cfg(unix)]
 #[test]
 fn a_link_refuses_to_change_a_files_mode() {
+    use std::os::unix::fs::MetadataExt;
     let (_tmp, dir) = profile();
     let member = dir.join("deps/member");
     let before = ino(&member);
@@ -326,14 +341,50 @@ fn lossy_pass_runs_only_when_named() {
     assert_eq!(on.passes[0].applied, 1);
 }
 
+/// A symlink. On Windows this needs Developer Mode or `SeCreateSymbolicLinkPrivilege`; without
+/// it the scan test has nothing to follow and says so instead of failing the suite.
+fn symlink_any(original: &Path, link: &Path) -> bool {
+    let created = {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(original, link)
+        }
+        #[cfg(windows)]
+        {
+            if original.is_dir() {
+                std::os::windows::fs::symlink_dir(original, link)
+            } else {
+                std::os::windows::fs::symlink_file(original, link)
+            }
+        }
+    };
+    match created {
+        Ok(()) => true,
+        Err(error) if error.raw_os_error() == Some(ERROR_PRIVILEGE_NOT_HELD) => {
+            eprintln!(
+                "symlink needs Developer Mode or SeCreateSymbolicLinkPrivilege; the scan test has nothing to follow"
+            );
+            false
+        }
+        Err(error) => panic!("{error}"),
+    }
+}
+
+/// `ERROR_PRIVILEGE_NOT_HELD`. On Unix the raw code is unrelated and the match never hits:
+/// `symlink` there fails for other reasons, which still panic.
+const ERROR_PRIVILEGE_NOT_HELD: i32 = 1314;
+
 #[test]
 fn scan_does_not_follow_symlinks() {
     let (tmp, dir) = profile();
     let outside = tmp.path().join("outside-dir");
     fs::create_dir(&outside).unwrap();
     fs::write(outside.join("secret"), b"x").unwrap();
-    symlink(&outside, dir.join("link-dir")).unwrap();
-    symlink(outside.join("secret"), dir.join("link-file")).unwrap();
+    if !symlink_any(&outside, &dir.join("link-dir"))
+        || !symlink_any(&outside.join("secret"), &dir.join("link-file"))
+    {
+        return;
+    }
 
     let scan = model::scan(&dir, &CARGO).unwrap();
 

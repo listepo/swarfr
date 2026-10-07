@@ -40,7 +40,8 @@ What it can do depends on the filesystem under your target dirs, not on the oper
 | btrfs | yes | yes, clones | free clone |
 | XFS with `reflink=1`, bcachefs | no | yes, clones | free clone |
 | ext4 and the rest | no | cargo home sources only, as hardlinks | a real copy |
-| NTFS, ReFS | not yet (`T21`) | not yet (`T21`) | a real copy |
+| NTFS | yes, LZNT1 | cargo home sources only, as hardlinks; artifacts with `--link-artifacts` | a real copy |
+| ReFS | no | yes, clones | free clone |
 
 `status` says which row you are on; nothing has to be configured.
 
@@ -324,7 +325,9 @@ names `status` prints: `cargo`, `swiftpm`, `dotnet`, `cmake`.
 - **`status` finds nothing.** Only dirs carrying cargo's own `CACHEDIR.TAG` count. A target
   created by a very old cargo, or a dir whose tag was deleted, is not recognised on purpose.
 - **"this filesystem neither shares blocks nor compresses".** The probe tried both and both
-  failed — ext4, NTFS, a network mount. Nothing is planned there rather than copied for no gain.
+  failed — ext4, a network mount. Nothing is planned there rather than copied for no gain. On
+  NTFS the line is the other one: the volume compresses and does not share blocks, so dedupe
+  links cargo home sources and build artifacts only with `--link-artifacts`.
 - **Exit code 2 every time.** Something holds the build lock: a running `cargo build`, a
   `cargo watch`, or rust-analyzer's check. Run when the editor is idle, or schedule it at night.
 - **`du` shows no change on btrfs.** btrfs reports uncompressed sizes in `stat`; look at `df` for

@@ -2,7 +2,6 @@
 
 use std::cell::RefCell;
 use std::fs::{self, File};
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -22,8 +21,7 @@ const NEWEST_MTIME: Duration = Duration::from_secs(1_200_000_000);
 
 fn write_at(path: &Path, content: &[u8], mtime: Duration) {
     fs::write(path, content).unwrap();
-    let file = File::open(path).unwrap();
-    file.set_modified(SystemTime::UNIX_EPOCH + mtime).unwrap();
+    common::set_mtime(path, SystemTime::UNIX_EPOCH + mtime);
 }
 
 /// Profile dirs `a/debug` and `b/debug`, each holding the same `deps/libx.rlib`.
@@ -77,7 +75,8 @@ fn equal_files_are_cloned_once_and_the_second_run_does_nothing() {
         (1, 1, 2),
         "{first:?}"
     );
-    assert_eq!(first.freed_bytes, fs::metadata(&a).unwrap().blocks() * 512);
+    let meta = fs::metadata(&a).unwrap();
+    assert_eq!(first.freed_bytes, swarfr::sys::allocated(&a, &meta));
     assert_ne!(ino(&b), b_ino, "b is now a clone of a");
     assert_ne!(ino(&a), ino(&b));
     assert_eq!(fs::read(&b).unwrap(), vec![7; BIG]);

@@ -44,9 +44,9 @@ pub fn workspace_roots(build_dir: &Path, units: &[PathBuf]) -> Vec<PathBuf> {
             let (relative, absolute): (Vec<PathBuf>, Vec<PathBuf>) =
                 file.into_iter().partition(|path| path.is_relative());
             foreign.extend(
-                absolute
-                    .into_iter()
-                    .filter(|path| !path.starts_with(build_dir)),
+                absolute.into_iter().filter(|path| {
+                    !crate::sys::plain(path).starts_with(crate::sys::plain(build_dir))
+                }),
             );
             let explained: BTreeSet<PathBuf> = relative
                 .iter()
@@ -93,8 +93,9 @@ fn dep_info(dir: &Path) -> Vec<Vec<PathBuf>> {
         .collect()
 }
 
-/// The prerequisites of a Makefile-style dep-info file: what follows `target:` on each rule line,
-/// with `\ ` unescaped. Comment lines (rustc's `# env-dep:`) are skipped.
+/// The prerequisites of a Makefile-style dep-info file: what follows `target:` on each rule line.
+/// A `\` before a space or another `\` is an escape. Any other `\` is kept: cargo on Windows
+/// writes path separators unescaped (`C:\ws\src\lib.rs`).
 fn prerequisites(text: &str) -> Vec<PathBuf> {
     let mut out = Vec::new();
     for line in text.lines() {
@@ -108,7 +109,15 @@ fn prerequisites(text: &str) -> Vec<PathBuf> {
         let mut chars = deps.chars();
         while let Some(c) = chars.next() {
             match c {
-                '\\' => word.extend(chars.next()),
+                '\\' => match chars.next() {
+                    Some(' ') => word.push(' '),
+                    Some('\\') => word.push('\\'),
+                    Some(other) => {
+                        word.push('\\');
+                        word.push(other);
+                    }
+                    None => word.push('\\'),
+                },
                 ' ' => {
                     if !word.is_empty() {
                         out.push(PathBuf::from(std::mem::take(&mut word)));
@@ -132,12 +141,15 @@ mod tests {
     fn rule_lines_give_their_prerequisites_unescaped() {
         let text = "/t/debug/ws: /w\\ s/src/main.rs /ws/src/lib.rs\n\
                     # env-dep:CARGO_PKG_NAME=ws\n\
-                    src/lib.rs:\n";
+                    src/lib.rs:\n\
+                    C:\\out\\lib.rlib: C:\\ws\\src\\lib.rs C:\\w\\ s\\src\\lib.rs\n";
         assert_eq!(
             prerequisites(text),
             [
                 PathBuf::from("/w s/src/main.rs"),
-                PathBuf::from("/ws/src/lib.rs")
+                PathBuf::from("/ws/src/lib.rs"),
+                PathBuf::from(r"C:\ws\src\lib.rs"),
+                PathBuf::from(r"C:\w s\src\lib.rs"),
             ]
         );
     }
@@ -156,29 +168,52 @@ mod tests {
         assert_eq!(strip_tail(path, Path::new("s/b/src/lib.rs")), None);
     }
 
+    /// Absolute on this platform. `/r/ws` is absolute on Unix and relative on Windows, and a
+    /// Windows path's `\` is escaped in dep-info the way the parser undoes it.
+    fn rooted(tail: &str) -> PathBuf {
+        if cfg!(windows) {
+            PathBuf::from(format!(r"C:\{}", tail.replace('/', r"\")))
+        } else {
+            PathBuf::from(format!("/{tail}"))
+        }
+    }
+
+    fn escaped(path: &Path) -> String {
+        path.display().to_string().replace('\\', "\\\\")
+    }
+
     /// `src/lib.rs` alone would name the member `b` and the dependency `v` as roots too.
     #[test]
     fn roots_come_from_pairs_of_cargo_and_rustc_dep_info() {
         let tmp = tempfile::TempDir::new().unwrap();
         let unit = tmp.path().join("debug");
         fs::create_dir_all(unit.join(DEPS_DIR)).unwrap();
+        let (member, own, vendor) = (
+            rooted("r/ws/crates/b/src/lib.rs"),
+            rooted("r/ws/src/lib.rs"),
+            rooted("r/vendor/v/src/lib.rs"),
+        );
         fs::write(
             unit.join("libws.d"),
             format!(
-                "{}/libws.rlib: /r/ws/crates/b/src/lib.rs /r/ws/src/lib.rs /r/vendor/v/src/lib.rs\n",
-                unit.display()
+                "{}: {} {} {}\n",
+                unit.display(),
+                escaped(&member),
+                escaped(&own),
+                escaped(&vendor),
             ),
         )
         .unwrap();
         fs::write(unit.join("deps/ws-1.d"), "x.rmeta: src/lib.rs\n").unwrap();
         fs::write(unit.join("deps/b-2.d"), "x.rmeta: crates/b/src/lib.rs\n").unwrap();
         // A dependency outside the workspace: absolute in rustc's file too.
-        fs::write(unit.join("deps/v-3.d"), "x.rmeta: /r/vendor/v/src/lib.rs\n").unwrap();
+        fs::write(
+            unit.join("deps/v-3.d"),
+            format!("x.rmeta: {}\n", escaped(&vendor)),
+        )
+        .unwrap();
 
-        assert_eq!(
-            workspace_roots(tmp.path(), &[unit]),
-            [PathBuf::from("/r/ws")]
-        );
+        assert_eq!(workspace_roots(tmp.path(), &[unit]), [rooted("r/ws")]);
     }
 
     #[test]
@@ -186,18 +221,20 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         let unit = tmp.path().join("debug");
         fs::create_dir_all(unit.join(DEPS_DIR)).unwrap();
+        let (own, vendor) = (rooted("r/ws/src/lib.rs"), rooted("r/vendor/v/src/lib.rs"));
         fs::write(
             unit.join("libws.d"),
-            "x.rlib: /r/ws/src/lib.rs /r/vendor/v/src/lib.rs\n",
+            format!("x.rlib: {} {}\n", escaped(&own), escaped(&vendor)),
         )
         .unwrap();
         fs::write(unit.join("deps/ws-1.d"), "x.rmeta: src/lib.rs\n").unwrap();
-        fs::write(unit.join("deps/v-3.d"), "x.rmeta: /r/vendor/v/src/lib.rs\n").unwrap();
+        fs::write(
+            unit.join("deps/v-3.d"),
+            format!("x.rmeta: {}\n", escaped(&vendor)),
+        )
+        .unwrap();
 
-        assert_eq!(
-            workspace_roots(tmp.path(), &[unit]),
-            [PathBuf::from("/r/ws")]
-        );
+        assert_eq!(workspace_roots(tmp.path(), &[unit]), [rooted("r/ws")]);
     }
 
     #[test]

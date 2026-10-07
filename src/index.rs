@@ -21,12 +21,14 @@ pub type Hash = [u8; HASH_BYTES];
 
 /// File format: magic, then fixed-size little-endian records. Bump the digit on any change; a
 /// file with another magic reads as empty and is rewritten by the next save.
-const MAGIC: &[u8] = b"DUNIDX02";
+const MAGIC: &[u8] = b"DUNIDX03";
 const U64_BYTES: usize = 8;
 const U32_BYTES: usize = 4;
-/// dev, ino, size, mtime seconds (u64 each), mtime nanoseconds (u32), hash, shared (u8), last
-/// seen in seconds since the epoch (u64).
-const RECORD_BYTES: usize = 5 * U64_BYTES + U32_BYTES + HASH_BYTES + 1;
+const U128_BYTES: usize = 16;
+/// dev (u64), ino (u128), size, mtime seconds (u64 each), mtime nanoseconds (u32), hash,
+/// shared (u8), last seen in seconds since the epoch (u64). `ino` is 128-bit so a ReFS file id
+/// fits; on every other platform the high half is zero.
+const RECORD_BYTES: usize = 4 * U64_BYTES + U128_BYTES + U32_BYTES + HASH_BYTES + 1;
 const TEMP_EXTENSION: &str = "tmp";
 const NANOS_PER_SEC: u32 = 1_000_000_000;
 
@@ -59,7 +61,7 @@ impl Eq for Slot {}
 /// Equal when the entries are: when each was loaded is not part of the content.
 #[derive(Debug, Default)]
 pub struct HashIndex {
-    entries: HashMap<(u64, u64), Slot>,
+    entries: HashMap<(u64, u128), Slot>,
     /// What a lookup stamps on an entry: the time the index was loaded.
     now: u64,
 }
@@ -158,7 +160,9 @@ impl HashIndex {
             let Ok(mtime) = entry.mtime.duration_since(SystemTime::UNIX_EPOCH) else {
                 continue;
             };
-            for value in [dev, ino, entry.size, mtime.as_secs()] {
+            out.extend_from_slice(&dev.to_le_bytes());
+            out.extend_from_slice(&ino.to_le_bytes());
+            for value in [entry.size, mtime.as_secs()] {
                 out.extend_from_slice(&value.to_le_bytes());
             }
             out.extend_from_slice(&mtime.subsec_nanos().to_le_bytes());
@@ -183,8 +187,10 @@ impl HashIndex {
                 record = tail;
                 head
             };
-            let mut u64_field = || u64::from_le_bytes(take(U64_BYTES).try_into().unwrap());
-            let (dev, ino, size, secs) = (u64_field(), u64_field(), u64_field(), u64_field());
+            let dev = u64::from_le_bytes(take(U64_BYTES).try_into().unwrap());
+            let ino = u128::from_le_bytes(take(U128_BYTES).try_into().unwrap());
+            let size = u64::from_le_bytes(take(U64_BYTES).try_into().unwrap());
+            let secs = u64::from_le_bytes(take(U64_BYTES).try_into().unwrap());
             let nanos = u32::from_le_bytes(take(U32_BYTES).try_into().unwrap());
             let hash: Hash = take(HASH_BYTES).try_into().unwrap();
             let shared = take(1)[0] != 0;
@@ -220,7 +226,7 @@ mod tests {
     fn stamp(ino: u64) -> Stamp {
         Stamp {
             dev: 1,
-            ino,
+            ino: u128::from(ino),
             size: 4096,
             mtime: SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000_000),
         }
@@ -256,8 +262,8 @@ mod tests {
     fn an_index_of_the_previous_format_reads_as_empty_and_is_rewritten() {
         let tmp = tempfile::TempDir::new().unwrap();
         let path = tmp.path().join("hashes.bin");
-        // `DUNIDX01`: one record without the last-seen field.
-        let mut old = b"DUNIDX01".to_vec();
+        // `DUNIDX02`: the previous record, with a 64-bit inode. A wider id bumped the magic.
+        let mut old = b"DUNIDX02".to_vec();
         old.resize(old.len() + 4 * U64_BYTES + U32_BYTES + HASH_BYTES + 1, 0);
         fs::write(&path, old).unwrap();
 

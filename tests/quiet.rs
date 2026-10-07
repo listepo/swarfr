@@ -2,7 +2,7 @@
 //! throwaway dirs.
 
 use std::cell::RefCell;
-use std::fs::{self, File};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Barrier};
 use std::time::{Duration, SystemTime};
@@ -49,10 +49,7 @@ impl Ecosystem for Lockless {
 fn write_old(path: &Path, content: &[u8]) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(path, content).unwrap();
-    File::open(path)
-        .unwrap()
-        .set_modified(SystemTime::UNIX_EPOCH + OLD_MTIME)
-        .unwrap();
+    common::set_mtime(path, SystemTime::UNIX_EPOCH + OLD_MTIME);
 }
 
 /// Units `a` and `b` under a fresh temp dir.

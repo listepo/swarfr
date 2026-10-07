@@ -51,19 +51,31 @@ fn allocated_size_matches_du_with_hardlinks_and_files_outside_profiles() {
     let inventory = inventory::inventory(&[root]).unwrap();
 
     let found = &inventory.targets[0];
-    let du = Command::new("du").arg("-sk").arg(&target).output().unwrap();
-    let du_kib: u64 = String::from_utf8(du.stdout)
-        .unwrap()
-        .split_whitespace()
-        .next()
-        .unwrap()
-        .parse()
-        .unwrap();
-    let ours_kib = found.allocated_bytes / BYTES_PER_KIB;
-    assert!(
-        ours_kib.abs_diff(du_kib) * 100 <= du_kib * DU_TOLERANCE_PERCENT,
-        "ours {ours_kib} KiB, du {du_kib} KiB"
-    );
+    match Command::new("du").arg("-sk").arg(&target).output() {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            eprintln!("skipped the du comparison: du is not installed");
+        }
+        Err(error) => panic!("{error}"),
+        Ok(du) => {
+            assert!(
+                du.status.success(),
+                "{}",
+                String::from_utf8_lossy(&du.stderr)
+            );
+            let du_kib: u64 = String::from_utf8(du.stdout)
+                .unwrap()
+                .split_whitespace()
+                .next()
+                .unwrap()
+                .parse()
+                .unwrap();
+            let ours_kib = found.allocated_bytes / BYTES_PER_KIB;
+            assert!(
+                ours_kib.abs_diff(du_kib) * 100 <= du_kib * DU_TOLERANCE_PERCENT,
+                "ours {ours_kib} KiB, du {du_kib} KiB"
+            );
+        }
+    }
     assert_eq!(found.paths, found.inodes + 1, "one inode has two paths");
     let [profile] = found.profiles.as_slice() else {
         panic!("{:?}", found.profiles)

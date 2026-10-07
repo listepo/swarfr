@@ -44,7 +44,7 @@ pub fn choose(checkout: &Path, eco: &dyn Ecosystem) -> Option<PathBuf> {
     let mut best: Option<(u64, PathBuf)> = None;
     for sibling in inventory::checkouts(&common) {
         let sibling = sibling.canonicalize().unwrap_or(sibling);
-        if sibling == root {
+        if sys::plain(&sibling) == sys::plain(root) {
             continue;
         }
         let Some(target) = eco.build_dir(&sibling.join(relative)) else {
@@ -83,7 +83,7 @@ pub fn positions(checkout: &Path) -> Vec<Position> {
     let mut best: Vec<(u64, Position)> = Vec::new();
     for sibling in inventory::checkouts(&common) {
         let sibling = sibling.canonicalize().unwrap_or(sibling);
-        if sibling == checkout {
+        if sys::plain(&sibling) == sys::plain(checkout) {
             continue;
         }
         for (build_dir, eco) in eco::discover(std::slice::from_ref(&sibling)) {
@@ -229,7 +229,7 @@ pub fn seed(
         } else {
             let metadata = entry.metadata()?;
             seeded.files += 1;
-            seeded.bytes += sys::allocated(&metadata);
+            seeded.bytes += sys::allocated(entry.path(), &metadata);
             if !dry_run {
                 // A clone where the filesystem has them: the copy shares the blocks until
                 // one side is written. Where it does not, a real copy — the point of seeding is

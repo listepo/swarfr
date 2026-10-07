@@ -17,18 +17,19 @@ pub const TMP_PREFIX: &str = ".swarfr-tmp-";
 /// Identity and version of a file. Any rewrite by the build changes it.
 ///
 /// `dev` and `ino` are whatever [`sys::file_id`] means by identity on this platform: a real
-/// device and inode where the filesystem has them, the path where it does not.
+/// device and inode where the filesystem has them. `ino` is 128-bit because a ReFS file id is;
+/// on every other platform the high half is zero.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Stamp {
     pub dev: u64,
-    pub ino: u64,
+    pub ino: u128,
     pub size: u64,
     pub mtime: SystemTime,
 }
 
 impl Stamp {
-    /// `path` is the one the metadata was read through; it is the identity itself where the
-    /// platform has no inode number.
+    /// `path` is the one the metadata was read through. On Windows the file id is read from
+    /// it; everywhere else the metadata already holds the inode.
     pub fn of(path: &Path, meta: &Metadata) -> io::Result<Self> {
         let (dev, ino) = sys::file_id(path, meta);
         Ok(Self {
@@ -66,8 +67,8 @@ impl Inode {
             stamp: Stamp::of(path, meta)?,
             mode: sys::mode(meta),
             flags: sys::flags(path, meta),
-            nlink: sys::nlink(meta),
-            allocated: sys::allocated(meta),
+            nlink: sys::nlink(path, meta),
+            allocated: sys::allocated(path, meta),
             paths: Vec::new(),
         })
     }
@@ -93,7 +94,7 @@ pub struct Profile {
 /// Walks one unit. Symlinks are not followed, other devices are not entered, and the build's
 /// private files and dirs are left out.
 pub fn scan(dir: &Path, eco: &dyn Ecosystem) -> io::Result<Profile> {
-    let mut by_inode: HashMap<(u64, u64), Inode> = HashMap::new();
+    let mut by_inode: HashMap<(u64, u128), Inode> = HashMap::new();
     let mut stale_temps = Vec::new();
     let walk = WalkDir::new(dir)
         .follow_links(false)

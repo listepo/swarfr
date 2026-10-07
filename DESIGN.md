@@ -167,8 +167,10 @@ table, `quiet` per group in `--json`):
 2. **Age floor.** Files younger than `engine::QUIET_MIN_AGE` (one day) are left out of the model,
    whatever a pass's own `min-age` says. A unit that had any is unsure.
 3. **Busy files.** A file found in use while it is replaced — `ETXTBSY`, `EBUSY`, a Windows
-   sharing or lock violation — is skipped as `Busy` and its unit is reported busy (exit code 2)
-   instead of failed. This holds for every guard.
+   sharing violation (32), lock violation (33), or access denied (5) from a `rename` over a file
+   opened without `FILE_SHARE_DELETE` — is skipped as `Busy` and its unit is reported busy
+   (exit code 2) instead of failed. This holds for every guard. An `ErrorKind::PermissionDenied`
+   that carries no raw code stays a failure.
 4. **Lossy passes** skip an unsure unit (`Unsure`); `RemoveTarget` skips a build dir holding
    one.
 5. **Invariants 2–6 hold unchanged**, and one check is added for every guard: the source of a
@@ -372,7 +374,9 @@ clone is better and needs no permission.
 The **index** maps `(device, inode)` to `(size, mtime, hash, shared, seen)`; a lookup with a different
 size or mtime misses, so a rewritten file is rehashed and loses its shared mark. It is one flat
 file of fixed little-endian records behind a magic string (`~/.cache/swarfr/hashes-v1.bin`,
-`--index` to override), written through a temp file and `rename`, saved on `--dry-run` too. It is
+`--index` to override; the bytes start with `DUNIDX03`), written through a temp file and
+`rename`, saved on `--dry-run` too. The inode field is 128 bits so a ReFS file id fits; on every
+other platform the high half is zero. It is
 only a cache: a missing, truncated or foreign file reads as empty, and so does one of an older
 format (the magic's digit), which the next save replaces. `seen` is when a run last hit the
 entry; on save, entries idle longer than `[index] idle-days` (default 30) are dropped. Those are
@@ -396,8 +400,9 @@ replaces the inode it compresses — both wrong inside a target, where final art
 `incremental/` are hardlink groups. So compression is an engine action, `Action::Compress(inode)`:
 
 1. The engine checks the group as for a replacement (locked paths, no foreign links, no flags but
-   the compressed one, stamps unchanged) and clones its first path into a sibling temp. A clone
-   costs no space.
+   the compressed one, stamps unchanged) and copies its first path into a sibling temp. Where
+   `caps.clone` is set that copy is a clone and costs no space. Where it is not — NTFS — it is
+   `fs::copy`: compression has to rewrite a private file, and `clone_file` itself never copies.
 2. Up to 256 such private copies go to `Pass::compress` in one call; the backend compresses them
    in parallel (LZFSE, level 5, keep only below 95% of the size, verify by reading back).
 3. A copy that came back with the compressed flag and the same length is swapped in after the
@@ -992,18 +997,21 @@ would get btrfs mounted `nodatacow`, XFS made with `reflink=0` and a bind-mounte
 trying does not. Compression is the exception, and it is asked by name — `statfs().f_type`
 against `BTRFS_SUPER_MAGIC` — because there the attempt lies: ext4 accepts `FS_COMPR_FL`, keeps
 it where `lsattr` shows it, and compresses nothing. macOS
-answers true for both without asking (APFS is what every number in `docs/bench.md` came from),
-Windows answers `Caps::NONE` until `T21`.
+answers true for both without asking (APFS is what every number in `docs/bench.md` came from).
+Windows probes both calls, cached per volume serial: a 64 KiB file, then
+`FSCTL_DUPLICATE_EXTENTS_TO_FILE` and `FSCTL_SET_COMPRESSION`. NTFS answers compress and not
+clone; ReFS the reverse. The two never meet on one volume, so the fused compress-then-clone
+path does not run there.
 
 | | macOS (APFS) | Linux | Windows |
 | --- | --- | --- | --- |
-| identity | `st_dev` + `st_ino` | `st_dev` + `st_ino` | the path (no handle, no inode) |
-| link count | `st_nlink` | `st_nlink` | 1 — links are invisible without a handle |
-| size on disk | `st_blocks × 512` | `st_blocks × 512` | logical length |
-| flags | `st_flags` (`UF_COMPRESSED`) | `FS_IOC_GETFLAGS`, masked to `COMPR`, `IMMUTABLE`, `APPEND`, `NOCOW` | `FILE_ATTRIBUTE_*`, masked to the ones that mean something |
-| clone | `fs::copy` → `fclonefileat` | `FICLONE` (btrfs, XFS `reflink=1`, bcachefs) | plain copy |
-| compress | applesauce (LZFSE) | `FS_COMPR_FL` + rewrite (btrfs) | — |
-| probe | write test only | `FICLONE` and `FS_IOC_SETFLAGS` | none; `Caps::NONE` |
+| identity | `st_dev` + `st_ino` (`u128`, high half 0) | `st_dev` + `st_ino` (`u128`, high half 0) | volume serial + 128-bit `FILE_ID_INFO` |
+| link count | `st_nlink` | `st_nlink` | `FILE_STANDARD_INFO` |
+| size on disk | `st_blocks × 512` | `st_blocks × 512` | `GetCompressedFileSizeW` |
+| flags | `st_flags` (`UF_COMPRESSED`) | `FS_IOC_GETFLAGS`, masked to `COMPR`, `IMMUTABLE`, `APPEND`, `NOCOW` | `FILE_ATTRIBUTE_*`, masked to `COMPRESSED`, `READONLY`, `HIDDEN`, `SYSTEM`, `REPARSE_POINT` |
+| clone | `fs::copy` → `fclonefileat` | `FICLONE` (btrfs, XFS `reflink=1`, bcachefs) | `FSCTL_DUPLICATE_EXTENTS_TO_FILE` (ReFS); `Unsupported` elsewhere |
+| compress | applesauce (LZFSE) | `FS_COMPR_FL` + rewrite (btrfs) | `FSCTL_SET_COMPRESSION` (LZNT1, NTFS) |
+| probe | write test only | `FICLONE` and `FS_IOC_SETFLAGS` | both ioctls; directory mtime restored |
 
 Two Linux details that are easy to get wrong:
 
@@ -1031,12 +1039,39 @@ dedupe would be a second apply path with the same invariants to maintain and not
 one does not give.
 
 `applesauce` is a macOS-only dependency (`[target.'cfg(target_os = "macos")'.dependencies]`), so
-the other two platforms do not build it at all.
+the other two platforms do not build it at all. `windows-sys` is the Windows counterpart
+(`[target.'cfg(windows)'.dependencies]`), features `Win32_Foundation`,
+`Win32_Storage_FileSystem`, `Win32_System_IO` and `Win32_System_Ioctl`. Each ioctl sits behind
+a safe wrapper.
 
-Windows deserves its own caveat. Identity from a path means two hardlinks read as two files and
-a link count always reads 1. That is consistent — `model::scan` groups by the same id it later
-checks against — and it is inert, because nothing is planned there. `GetFileInformationByHandle`
-replaces it in `T21`.
+Windows details that are easy to get wrong:
+
+- `clone_file` is `FSCTL_DUPLICATE_EXTENTS_TO_FILE`, not `fs::copy`. The destination is sized
+  first. A file of at most 4 GiB is one call that ends at EOF, so the range does not have to be
+  cluster-aligned; a larger file is split on the volume cluster size, and one call moves at most
+  4 GiB. An empty file is created empty when the volume can clone and `Unsupported` otherwise —
+  a zero-length ioctl is rejected by both filesystems. On failure the destination is removed.
+  NTFS returns `Unsupported` and leaves no copy. `seed` asks `caps` and falls back to `fs::copy`
+  itself.
+- Compression is `FSCTL_SET_COMPRESSION` with `COMPRESSION_FORMAT_LZNT1`. The compressed form is
+  kept only when the allocated size is under 95% of the logical size; otherwise the file is set
+  back to `COMPRESSION_FORMAT_NONE`. WOF / LZX is a different call and is not this one.
+- The probe restores the directory mtime through a handle opened with
+  `FILE_FLAG_BACKUP_SEMANTICS` and write access. A read-only `File::open` of a directory is
+  access denied, and `SetFileTime` needs `FILE_WRITE_ATTRIBUTES`. The same open is what
+  `set_mtime` uses for files.
+- Identity is the volume serial plus `FILE_ID_128`. The 64-bit index from
+  `GetFileInformationByHandle` is not unique on ReFS, so it is not used. Link count is
+  `FILE_STANDARD_INFO`: `Metadata::number_of_links` is still unstable on the pinned toolchain.
+  `GetCompressedFileSizeW` is the size on disk, so `ALLOCATED_SHOWS_COMPRESSION` is true and a
+  compression win shows up in `freed_bytes`.
+- `sys::plain` strips a `\\?\` or `\\?\UNC\` prefix, turns `/` into `\`, and uppercases the
+  drive letter. Family config keys and `seed`'s sibling check compare plain paths; `git` is
+  handed them too, because it rewrites `\\?\` into `//?/` and refuses that. The path stored
+  for I/O stays canonical, so a target past `MAX_PATH` still works.
+- A `rename` onto a file another handle has open without `FILE_SHARE_DELETE` is
+  `ERROR_ACCESS_DENIED` (5) on current Windows, not sharing violation (32). Both, and lock
+  violation (33), are `Skip::Busy`.
 
 What the tests cover: `src/sys/mod.rs` holds the facts that must hold on every platform — a file
 has an identity of its own and a size on disk, a clone holds the bytes of its source, an empty
@@ -1044,5 +1079,8 @@ batch costs nothing, and the probe answers the same thing twice, cleans up after
 claims nothing about a directory it cannot read. `tests/caps.rs` states both outcomes for each
 pass and picks by `caps`, so the same test is an assertion on every filesystem: on btrfs the
 twin becomes a clone, on ext4 nothing is planned and nothing is touched. Point `TMPDIR` at a
-mount to choose the side. `just check-cross` compiles both other targets, which is what catches
-a port that stopped building.
+mount to choose the side; on Windows that variable is `TEMP`. `tests/windows.rs` covers the
+NTFS compress path, a rename blocked by a handle without delete share, and a family key written
+with `C:/` against a `\\?\` path. The ReFS half of `clone_file` runs when `TEMP` is a ReFS
+volume and asserts the refusal on NTFS. `just check-cross` compiles both other targets, which
+is what catches a port that stopped building.

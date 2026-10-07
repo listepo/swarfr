@@ -209,7 +209,7 @@ mod tests {
         Inode {
             stamp: Stamp {
                 dev: 1,
-                ino: mtime_secs,
+                ino: u128::from(mtime_secs),
                 size: DEFAULT_MIN_SIZE,
                 mtime: SystemTime::UNIX_EPOCH + Duration::from_secs(mtime_secs),
             },

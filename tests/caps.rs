@@ -125,7 +125,7 @@ fn status_names_what_the_filesystem_cannot_do() {
     let text = String::from_utf8_lossy(&out.stdout);
     let caps = sys::caps(&fixture.target());
     assert_eq!(
-        text.contains("nothing here"),
+        text.contains("this filesystem"),
         !(caps.clone && caps.compress),
         "{caps:?} in:\n{text}"
     );

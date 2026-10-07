@@ -131,8 +131,7 @@ fn built_days_ago(target: &Path, days: u64) {
     let then = std::time::SystemTime::now() - std::time::Duration::from_secs(days * 24 * 60 * 60);
     for profile in swarfr::eco::cargo::profile_dirs(target).unwrap() {
         for entry in fs::read_dir(&profile).unwrap() {
-            let entry = fs::File::open(entry.unwrap().path()).unwrap();
-            entry.set_modified(then).unwrap();
+            common::set_mtime(&entry.unwrap().path(), then);
         }
     }
 }
@@ -199,7 +198,10 @@ fn every_build_dir_says_its_ecosystem_checkout_position_and_guard() {
     let json = serde_json::to_value(api).unwrap();
     assert_eq!(json["ecosystem"], "cargo");
     assert_eq!(json["checkout"], mono.repo.to_str().unwrap());
-    assert_eq!(json["position"], "services/api/target");
+    assert_eq!(
+        json["position"],
+        "services/api/target".replace('/', std::path::MAIN_SEPARATOR_STR)
+    );
     assert_eq!(json["guard"], "lock");
     // The keys that were there before stay.
     assert!(json["allocated_bytes"].is_u64() && json["family"].is_string());
@@ -208,7 +210,7 @@ fn every_build_dir_says_its_ecosystem_checkout_position_and_guard() {
 /// A request that works on `roots` with `family` configured as the config file would.
 fn with_family(roots: &[PathBuf], config: &str) -> Request {
     let family = inventory::family(&roots[0]).unwrap();
-    let text = format!("[family.\"{}\"]\n{config}", family.display());
+    let text = format!("[family.\"{}\"]\n{config}", common::toml_basic(&family));
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join("config.toml");
     fs::write(&path, text).unwrap();
@@ -332,7 +334,8 @@ fn status_groups_by_family_checkout_and_ecosystem_and_lists_the_largest() {
         + &rows[..5].concat()
         + "      3 more, 0.00 GiB: --all lists them\n"
         + &tail;
-    assert_eq!(status(false), limited);
+    let native = |text: String| text.replace('/', std::path::MAIN_SEPARATOR_STR);
+    assert_eq!(status(false), native(limited));
     expected += &rows.concat();
-    assert_eq!(status(true), expected + &tail);
+    assert_eq!(status(true), native(expected + &tail));
 }

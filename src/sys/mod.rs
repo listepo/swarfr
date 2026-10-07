@@ -10,8 +10,8 @@
 //! and cached per device. On Linux the answer is found by trying: btrfs and XFS with
 //! `reflink=1` share blocks and ext4 does not, but so does btrfs mounted `nodatacow` and XFS
 //! with `reflink=0`, which no table of filesystem names gets right. macOS answers `true` for
-//! both without asking, because APFS is what the tool was measured on. Windows answers `false`
-//! for both until `T21`.
+//! both without asking, because APFS is what the tool was measured on. Windows asks the volume:
+//! NTFS compresses and does not clone, ReFS clones and does not compress.
 
 #[cfg_attr(target_os = "macos", path = "macos.rs")]
 #[cfg_attr(all(unix, not(target_os = "macos")), path = "unix.rs")]
@@ -20,10 +20,11 @@ mod imp;
 
 pub use imp::{
     ALLOCATED_SHOWS_COMPRESSION, COMPRESSED, Compressor, allocated, clone_file, file_id, flags,
-    mode, nlink, set_mode, symlink,
+    mode, nlink, plain, set_mode, symlink,
 };
 
 use std::path::Path;
+use std::time::SystemTime;
 
 /// What the filesystem under one directory can do for us.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
@@ -82,28 +83,31 @@ pub fn temp_dir() -> std::path::PathBuf {
     std::env::temp_dir()
 }
 
+/// Sets the modification time of a file or a directory.
+///
+/// On Windows a directory cannot be opened without `FILE_FLAG_BACKUP_SEMANTICS`, so this is the
+/// call that puts a probed directory's mtime back.
+pub fn set_mtime(path: &Path, mtime: SystemTime) -> std::io::Result<()> {
+    imp::open_for_times(path)?.set_modified(mtime)
+}
+
 /// Runs a probe inside `dir` and puts the directory's modification time back afterwards.
 ///
 /// Creating and removing a file changes the mtime of the directory it is in, and that mtime is
 /// how `evict` and `incremental` tell a profile nobody has built for a week from one built this
 /// morning. A probe that moved it would make every target look freshly built — found exactly
 /// that way, by the incremental test on btrfs.
-#[cfg(not(windows))]
 fn probing_in<T>(dir: &Path, probe: impl FnOnce() -> T) -> T {
     let before = std::fs::metadata(dir).and_then(|meta| meta.modified());
     let found = probe();
-    if let Ok(mtime) = before
-        && let Ok(handle) = std::fs::File::open(dir)
-    {
-        let _ = handle.set_times(std::fs::FileTimes::new().set_modified(mtime));
+    if let Ok(mtime) = before {
+        let _ = set_mtime(dir, mtime);
     }
     found
 }
 
 /// A name for a probe file inside `dir`, unique per process and call. It carries the engine's
 /// temp prefix, so one left behind by a kill is swept by the next run like any other temp.
-/// Windows answers [`Caps::NONE`] without probing, so nothing there calls this.
-#[cfg(not(windows))]
 fn probe_path(dir: &Path) -> std::path::PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -140,8 +144,8 @@ mod tests {
             file_id(&a, &fs::metadata(&a).unwrap()),
             file_id(&a, &meta_a)
         );
-        assert_eq!(nlink(&meta_a), 1);
-        assert!(allocated(&meta_a) >= 64 * 1024);
+        assert_eq!(nlink(&a, &meta_a), 1);
+        assert!(allocated(&a, &meta_a) >= 64 * 1024);
         assert_eq!(flags(&a, &meta_a) & !COMPRESSED, 0, "a plain file is ours");
     }
 
@@ -205,10 +209,7 @@ mod tests {
         let dir = tmp.path().join("profile");
         fs::create_dir(&dir).unwrap();
         let a_week_ago = SystemTime::now() - Duration::from_secs(7 * 24 * 60 * 60);
-        fs::File::open(&dir)
-            .unwrap()
-            .set_times(fs::FileTimes::new().set_modified(a_week_ago))
-            .unwrap();
+        set_mtime(&dir, a_week_ago).unwrap();
 
         caps(&dir);
 

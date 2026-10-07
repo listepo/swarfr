@@ -332,7 +332,7 @@ fn git_link(project: &Path) -> (Option<PathBuf>, bool) {
                 .parent()
                 .filter(|worktrees| worktrees.file_name().is_some_and(|n| n == WORKTREES_DIR))
                 .and_then(Path::parent)
-                .map(Path::to_path_buf);
+                .map(|path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf()));
             return (family, true);
         }
         let common = match fs::read_to_string(gitdir.join("commondir")) {

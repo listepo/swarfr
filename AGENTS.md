@@ -41,5 +41,6 @@ the contract. Measurements that justify the design are in `docs/research.md`.
   `done.md`. Claim a task in the table before starting and write the execution plan into its card.
 - Version-gated work lives in `roadmap.md`; re-check the cargo changelog before moving an item.
 - Dependency candidates are listed in `DESIGN.md`.
-- macOS / APFS is the only supported platform for 0.x; keep platform calls behind the backend
-  boundary described in `DESIGN.md`.
+- macOS, Linux and Windows are supported for 0.x. What a pass can do depends on the filesystem
+  (APFS, btrfs, NTFS, ReFS); keep platform calls behind the backend boundary described in
+  `DESIGN.md`.

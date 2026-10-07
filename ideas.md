@@ -37,8 +37,9 @@ Raised by the T21 readiness analysis. NTFS's classic compression is LZNT1: a wea
 fragmentation, and it stays on for every later write. The closer analogue of what the APFS
 backend does is WOF (`compact /EXE:LZX`, `FSCTL_SET_EXTERNAL_BACKING`): a much better ratio,
 and a file that is rewritten simply becomes a plain file again, exactly like decmpfs. It is a
-different API with its own edge cases, so it is a choice to measure in T21's spike, not to
-assume. T21's card names `FSCTL_SET_COMPRESSION`; changing that is the creator's call.
+different API with its own edge cases. T21 shipped `FSCTL_SET_COMPRESSION` (LZNT1), which the
+card named; the fixture ratio is in `docs/bench.md`. Replacing it with WOF is still the
+creator's call.
 
 ## Daemon: a filesystem watcher
 

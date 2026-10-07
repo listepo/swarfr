@@ -5,7 +5,6 @@
 #![allow(dead_code)]
 
 use std::fs::{self, File};
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime};
@@ -54,7 +53,9 @@ pub fn filesystem_can(has: fn(&swarfr::sys::Caps) -> bool, what: &str) -> bool {
 const FILES: &[(&str, &str)] = &[
     (
         "ws/Cargo.toml",
-        "[workspace]\nmembers = [\"fx\", \"fx-macros\"]\nresolver = \"3\"\n",
+        "[workspace]\nmembers = [\"fx\", \"fx-macros\"]\nresolver = \"3\"\n\
+         [profile.dev.package.fx-macros]\ndebug = 0\n\
+         [profile.test.package.fx-macros]\ndebug = 0\n",
     ),
     (
         "ws/fx/Cargo.toml",
@@ -111,6 +112,11 @@ const FILES: &[(&str, &str)] = &[
 
 /// A cargo workspace in a temp dir: a bin + lib package with a build script, unit and
 /// integration tests, a proc-macro member and a dependency from outside the workspace.
+///
+/// The proc-macro is built with `debug = 0`. On Windows a proc-macro PDB is rewritten when the
+/// compiler loads the dylib, so cargo reports `info of dependency changed` on every switch
+/// between `cargo build` and `cargo test` and the freshness oracle can never go green. The
+/// override is package-scoped, so the rest of the target still carries full debuginfo.
 pub struct Fixture {
     _tmp: TempDir,
     pub root: PathBuf,
@@ -201,6 +207,15 @@ pub fn stale_units_at(ws: &Path, target: &Path) -> Vec<String> {
     stale
 }
 
+/// A path inside a TOML basic string. `\` starts an escape, and a canonical Windows path is
+/// full of them.
+pub fn toml_basic(path: &Path) -> String {
+    path.display()
+        .to_string()
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+}
+
 /// The binary under test, with a config home of its own: a test must never read, or depend on,
 /// the configuration of the machine it runs on.
 pub fn swarfr(config_home: &Path) -> assert_cmd::Command {
@@ -215,8 +230,13 @@ pub fn allocated_bytes(dir: &Path) -> u64 {
     inodes.iter().map(|inode| inode.allocated).sum()
 }
 
-pub fn ino(path: &Path) -> u64 {
-    fs::metadata(path).unwrap().ino()
+pub fn ino(path: &Path) -> u128 {
+    let meta = fs::metadata(path).unwrap();
+    swarfr::sys::file_id(path, &meta).1
+}
+
+pub fn set_mtime(path: &Path, time: SystemTime) {
+    swarfr::sys::set_mtime(path, time).unwrap();
 }
 
 /// Repeats an engine run while it reads as busy. A lock fd that is open while another test
@@ -264,21 +284,35 @@ pub fn fake_profile(target: &Path, name: &str, kib: usize, days: u64) -> PathBuf
     fs::write(profile.join("deps/libx.rlib"), vec![1; kib * KIB]).unwrap();
     let built = SystemTime::now() - Duration::from_secs(days * SECS_PER_DAY);
     for entry in fs::read_dir(&profile).unwrap() {
-        let entry = File::open(entry.unwrap().path()).unwrap();
-        entry.set_modified(built).unwrap();
+        set_mtime(&entry.unwrap().path(), built);
     }
     profile
 }
 
 /// `git <args>` in `dir`, with an identity of its own so no user config is needed; must succeed.
+/// Absolute paths are given without the `\\?\` prefix: git on Windows rejects it.
 pub fn git(dir: &Path, args: &[&str]) {
-    let status = Command::new("git")
-        .current_dir(dir)
+    let dir = swarfr::sys::plain(dir);
+    let args: Vec<std::ffi::OsString> = args
+        .iter()
+        .map(|arg| {
+            let path = Path::new(arg);
+            if path.is_absolute() {
+                swarfr::sys::plain(path).into_os_string()
+            } else {
+                (*arg).into()
+            }
+        })
+        .collect();
+    let output = Command::new("git")
+        .current_dir(&dir)
         .args(["-c", "user.name=swarfr", "-c", "user.email=swarfr@invalid"])
-        .args(args)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
+        .args(&args)
+        .output()
         .unwrap();
-    assert!(status.success(), "git {args:?}");
+    assert!(
+        output.status.success(),
+        "git {args:?}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

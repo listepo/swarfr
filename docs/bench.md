@@ -85,6 +85,27 @@ ext4 is the other side of the same measurement: `caps` finds neither capability 
 lossless passes plan nothing, and `status` says so in a line under the target. Making ext4 win
 anything needs the link fallback, which is `T22`.
 
+## Windows, NTFS (a fixture, not a workspace)
+
+No workspace bench has been run on Windows. A development build is never pointed at a real
+`target/`, and this section does not invent one. What was measured is the compression unit
+test on an NTFS volume: a 256 KiB file filled with one repeated byte (`0x09`), allocated size
+from `GetCompressedFileSizeW`.
+
+| File | Logical | Allocated after LZNT1 |
+| --- | --- | --- |
+| 256 KiB of one byte | 262144 | 16384 (6.25%) |
+
+`ALLOCATED_SHOWS_COMPRESSION` is true here, so `du` and the tool's `freed_bytes` both see that
+drop. A file of one repeated byte is the best case LZNT1 can show; real object files will do
+worse, and that number is not a prediction for a target dir. Bytes that do not shrink below 95%
+of their logical size are put back to uncompressed. WOF / LZX is a different API and is not what
+this measures (`ideas.md`).
+
+ReFS block cloning is implemented and unmeasured on this machine: `TEMP` is NTFS, so
+`clone_file` returns `Unsupported` and leaves no copy. The same tests assert a real clone when
+`TEMP` points at a ReFS volume.
+
 ## What the passes cost
 
 | | wall clock |

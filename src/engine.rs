@@ -6,7 +6,7 @@
 //! rewrites content (compression) only ever gets private copies to work on.
 
 use std::cell::Cell;
-use std::fs::{self, File, FileTimes, TryLockError};
+use std::fs::{self, File, TryLockError};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -545,7 +545,10 @@ fn failed(e: &io::Error) -> Skip {
         e.kind(),
         io::ErrorKind::ExecutableFileBusy | io::ErrorKind::ResourceBusy
     ) || (cfg!(windows)
-        && matches!(e.raw_os_error(), Some(SHARING_VIOLATION | LOCK_VIOLATION)));
+        && matches!(
+            e.raw_os_error(),
+            Some(SHARING_VIOLATION | LOCK_VIOLATION | ACCESS_DENIED)
+        ));
     if busy {
         Skip::Busy
     } else {
@@ -554,9 +557,12 @@ fn failed(e: &io::Error) -> Skip {
 }
 
 /// `ERROR_SHARING_VIOLATION` and `ERROR_LOCK_VIOLATION`: another process has the file open
-/// without sharing, or a range of it locked.
+/// without sharing, or a range of it locked. A `rename` over a file opened without
+/// `FILE_SHARE_DELETE` comes back as `ERROR_ACCESS_DENIED` on current Windows, not as a
+/// sharing violation — measured, the two are the same situation.
 const SHARING_VIOLATION: i32 = 32;
 const LOCK_VIOLATION: i32 = 33;
+const ACCESS_DENIED: i32 = 5;
 
 /// Adds the unit of every file the pass found busy to `busy`, once.
 fn note_busy(pass_report: &PassReport, locked: &[PathBuf], busy: &mut Vec<PathBuf>) {
@@ -743,15 +749,23 @@ fn lift_dirs(batch: &[Inode]) -> Vec<(PathBuf, u32)> {
     lifted
 }
 
-/// A private copy of the group's content next to its first path. Costs no space: a clone.
+/// A private copy of the group's content next to its first path. Where the filesystem clones,
+/// the copy shares the source's blocks. Where it only compresses (NTFS), the copy is a real
+/// one and renaming it into place drops the uncompressed bytes.
 fn stage_copy(member: &Inode, locked: &[PathBuf]) -> io::Result<Result<PathBuf, Skip>> {
     if let Some(skip) = check_group(member, locked)? {
         return Ok(Err(skip));
     }
-    let copy = sibling_temp(&member.paths[0]);
-    if let Err(e) = clone_as(&member.paths[0], &copy, member) {
+    let source = &member.paths[0];
+    let copy = sibling_temp(source);
+    let staged = if sys::caps(source).clone {
+        clone_as(source, &copy, member)
+    } else {
+        copy_as(source, &copy, member)
+    };
+    if let Err(error) = staged {
         let _ = fs::remove_file(&copy);
-        return Err(e);
+        return Err(error);
     }
     Ok(Ok(copy))
 }
@@ -827,7 +841,7 @@ fn rename_over(
 fn link_as(source: &Path, temp: &Path, member: &Inode) -> io::Result<()> {
     fs::hard_link(source, temp)?;
     if member.stamp.mtime > fs::symlink_metadata(temp)?.modified()? {
-        File::open(temp)?.set_times(FileTimes::new().set_modified(member.stamp.mtime))?;
+        sys::set_mtime(temp, member.stamp.mtime)?;
     }
     Ok(())
 }
@@ -837,9 +851,16 @@ fn clone_as(source: &Path, temp: &Path, member: &Inode) -> io::Result<()> {
     restore_meta(temp, member)
 }
 
+fn copy_as(source: &Path, temp: &Path, member: &Inode) -> io::Result<()> {
+    fs::copy(source, temp)?;
+    restore_meta(temp, member)
+}
+
 fn restore_meta(temp: &Path, member: &Inode) -> io::Result<()> {
     // Times first: a read-only mode would not stop `futimens`, but an unreadable one stops `open`.
-    File::open(temp)?.set_times(FileTimes::new().set_modified(member.stamp.mtime))?;
+    // On Windows `File::open` does not grant `FILE_WRITE_ATTRIBUTES`, so the time goes through
+    // the backend, which opens the handle the platform needs.
+    sys::set_mtime(temp, member.stamp.mtime)?;
     sys::set_mode(temp, member.mode)
 }
 
@@ -870,10 +891,13 @@ mod tests {
             Skip::Failed(io::ErrorKind::PermissionDenied)
         );
         let sharing = io::Error::from_raw_os_error(SHARING_VIOLATION);
+        let denied = io::Error::from_raw_os_error(ACCESS_DENIED);
         if cfg!(windows) {
             assert_eq!(failed(&sharing), Skip::Busy);
+            assert_eq!(failed(&denied), Skip::Busy);
         } else {
             assert_ne!(failed(&sharing), Skip::Busy, "EPIPE on unix");
+            assert_ne!(failed(&denied), Skip::Busy);
         }
     }
 }

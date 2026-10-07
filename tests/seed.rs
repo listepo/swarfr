@@ -2,7 +2,6 @@
 
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 
 use predicates::str::contains;
 use swarfr::eco::cargo::{CARGO, LOCK_FILE};
@@ -11,21 +10,9 @@ use swarfr::seed;
 use tempfile::TempDir;
 
 mod common;
-use common::{Fixture, allocated_bytes, stale_units_at, swarfr};
+use common::{Fixture, allocated_bytes, git, stale_units_at, swarfr};
 
 const EXIT_FAILURE: i32 = 1;
-
-fn git(dir: &Path, args: &[&str]) {
-    let status = Command::new("git")
-        .current_dir(dir)
-        .args(["-c", "user.name=swarfr", "-c", "user.email=swarfr@invalid"])
-        .args(args)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .unwrap();
-    assert!(status.success(), "git {args:?}");
-}
 
 /// The fixture as a git repository with one worktree, built once in the repository itself.
 /// Returns the worktree's own copy of the workspace, which has no target dir yet.

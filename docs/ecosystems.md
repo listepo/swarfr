@@ -94,7 +94,7 @@ different safety claim from the one `DESIGN.md` makes, and it must be stated as 
   hardlinks**: MSBuild's own hardlink option (`CreateHardLinksForCopyLocalIfPossible`) is known
   to corrupt the NuGet cache, because `Copy` overwrites in place
   (https://github.com/dotnet/msbuild/issues/8273). On Windows that means ReFS / Dev Drive, which
-  is `T21`; on macOS and Linux the engine could do it today.
+  clones extents; on macOS and Linux the engine does it on APFS, btrfs, XFS and bcachefs.
 - **Compress.** Yes; managed assemblies and portable PDBs are not compressed internally.
 - **Seed.** No. `project.assets.json` and `*.csproj.FileListAbsolute.txt` record absolute paths,
   so a cloned `obj/` restores and rebuilds. A project's own assemblies also differ between

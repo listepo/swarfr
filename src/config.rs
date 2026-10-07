@@ -134,7 +134,10 @@ impl Config {
     }
 
     pub fn skips(&self, family: &Path) -> bool {
-        self.family.get(family).is_some_and(|family| family.skip)
+        let family = crate::sys::plain(family);
+        self.family
+            .iter()
+            .any(|(dir, entry)| crate::sys::plain(dir) == family && entry.skip)
     }
 }
 

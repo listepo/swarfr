@@ -6,8 +6,8 @@ Swarf: the chips and shavings a lathe or a mill throws off — metal cut away, w
 the part. Much of a Cargo `target/` directory is swarf, and `swarfr` sweeps it out — without
 deleting what you still build with and without slowing builds.
 
-Status: early. Every command and pass below works on macOS and Linux; Windows builds and reports
-but plans no work until `T21` in `plan.md`. A step-by-step guide is in `docs/usage.md`; whether
+Status: early. Every command and pass below works on macOS, Linux and Windows. What a pass can
+do depends on the filesystem — see Platforms. A step-by-step guide is in `docs/usage.md`; whether
 the same passes fit C++, .NET, Go and other build systems is studied in `docs/ecosystems.md`,
 and the architecture that would carry them, monorepos included, in `docs/architecture.md`.
 
@@ -30,8 +30,9 @@ out of date. Incremental builds stay where they were, within the noise.
 
 One planner, several approaches that reinforce each other (details in `DESIGN.md`):
 
-- **compress** — transparent APFS compression of stable artifacts;
-- **dedupe** — identical files across and inside targets become copy-on-write clones;
+- **compress** — transparent compression of stable artifacts (APFS LZFSE, btrfs, NTFS LZNT1);
+- **dedupe** — identical files across and inside targets become copy-on-write clones where the
+  filesystem shares blocks, and hardlinks of safe files where it does not;
 - **seed** — a new worktree's target starts as a zero-byte clone of a sibling's, so third-party
   crates are not rebuilt;
 - **orphans / evict** — opt-in removal of targets whose worktree is gone, idle targets, and
@@ -70,9 +71,10 @@ its place in the checkout: size on disk as `du` counts it, days since the last b
 is gone from a live checkout, and
 totals — bytes not compressed yet and an upper bound of what dedupe could share.
 
-`run` applies two lossless passes. **compress**: files of 8 KB and more get transparent APFS
-compression (LZFSE); hardlink groups stay groups. **dedupe**: files with equal content become
-copy-on-write clones of one copy, compressed if that copy is. Targets are compared inside a
+`run` applies two lossless passes. **compress**: files of 8 KB and more get transparent
+compression (LZFSE on APFS, the btrfs compression flag, LZNT1 on NTFS); hardlink groups stay
+groups. **dedupe**: files with equal content become copy-on-write clones of one copy where the
+filesystem shares blocks, compressed if that copy is. Targets are compared inside a
 family, which is where most duplicates are. What the compression backend refused, and why, is
 printed at the end. A `<ROOT>` is searched for targets; a target dir itself works too.
 
@@ -266,9 +268,9 @@ filesystem can do, and it never pretends:
 | | macOS | Linux | Windows |
 | --- | --- | --- | --- |
 | `status`, `advise`, `seed` | yes | yes | yes |
-| `dedupe` (block sharing) | yes, APFS | yes on btrfs, XFS (`reflink=1`), bcachefs | not yet — ReFS is `T21` |
-| `dedupe` where blocks cannot be shared | — | ext4, and any other: hardlinks, see below | not yet |
-| `compress` | yes, APFS/LZFSE | yes on btrfs | not yet — NTFS is `T21` |
+| `dedupe` (block sharing) | yes, APFS | yes on btrfs, XFS (`reflink=1`), bcachefs | yes on ReFS |
+| `dedupe` where blocks cannot be shared | — | ext4, and any other: hardlinks, see below | NTFS: hardlinks, see below |
+| `compress` | yes, APFS/LZFSE | yes on btrfs | yes, NTFS/LZNT1 |
 
 The question is the filesystem, not the operating system, so the tool asks yours instead of
 guessing from its name: it writes a small temp file, tries to clone it and tries to set the

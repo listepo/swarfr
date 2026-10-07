@@ -32,15 +32,18 @@ fn fixture() -> Fixture {
     for name in ["a", "b"] {
         let profile = fake_target(&root, name, KIB, DAYS);
         // The artifact too, not only the profile's top level: older than min-age.
-        File::open(profile.join("deps/libx.rlib"))
-            .unwrap()
-            .set_modified(SystemTime::now() - Duration::from_secs(DAYS * 24 * 3600))
-            .unwrap();
+        common::set_mtime(
+            &profile.join("deps/libx.rlib"),
+            SystemTime::now() - Duration::from_secs(DAYS * 24 * 3600),
+        );
     }
     let config = base.join("config.toml");
     fs::write(
         &config,
-        format!("roots = [\"{}\"]\nacross-families = true\n", root.display()),
+        format!(
+            "roots = [\"{}\"]\nacross-families = true\n",
+            common::toml_basic(&root)
+        ),
     )
     .unwrap();
     Fixture {
@@ -101,10 +104,7 @@ fn build(profile: &Path, age: Duration) {
     let path = profile.join("deps/new.rlib");
     fs::write(&path, vec![2; KIB * 1024]).unwrap();
     for path in [path, profile.join("deps")] {
-        File::open(path)
-            .unwrap()
-            .set_modified(SystemTime::now() - age)
-            .unwrap();
+        common::set_mtime(&path, SystemTime::now() - age);
     }
 }
 

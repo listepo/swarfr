@@ -34,15 +34,15 @@ const VERIFY: bool = true;
 
 /// Device and inode: the pair that says "the same file", whatever path it was reached by. The
 /// path is what platforms without an inode number need; here it is not read.
-pub fn file_id(_path: &Path, meta: &Metadata) -> (u64, u64) {
-    (meta.dev(), meta.ino())
+pub fn file_id(_path: &Path, meta: &Metadata) -> (u64, u128) {
+    (meta.dev(), u128::from(meta.ino()))
 }
 
-pub fn nlink(meta: &Metadata) -> u64 {
+pub fn nlink(_path: &Path, meta: &Metadata) -> u64 {
     meta.nlink()
 }
 
-pub fn allocated(meta: &Metadata) -> u64 {
+pub fn allocated(_path: &Path, meta: &Metadata) -> u64 {
     meta.blocks() * ST_BLOCK_BYTES
 }
 
@@ -83,6 +83,14 @@ pub fn set_mode(path: &Path, mode: u32) -> io::Result<()> {
 
 pub fn symlink(original: &Path, link: &Path) -> io::Result<()> {
     std::os::unix::fs::symlink(original, link)
+}
+
+pub fn open_for_times(path: &Path) -> io::Result<fs::File> {
+    fs::File::open(path)
+}
+
+pub fn plain(path: &Path) -> PathBuf {
+    path.to_path_buf()
 }
 
 /// A copy that shares its blocks with the source until one of them is written.

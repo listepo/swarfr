@@ -120,7 +120,7 @@ fn the_config_file_can_ask_for_it_too() {
         format!(
             "roots = [\"{}\"]\nlossy = [\"evict\"]\n\
              [evict]\nidle-days = {IDLE_DAYS}\nwhole-target = true\n",
-            root.display()
+            common::toml_basic(&root)
         ),
     )
     .unwrap();

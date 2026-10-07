@@ -33,7 +33,7 @@ fn config_home(root: &Path, body: &str) -> PathBuf {
 fn evicting(root: &Path) -> String {
     format!(
         "roots = [\"{}\"]\nlossy = [\"evict\"]\n[evict]\nidle-days = {IDLE_DAYS}\n",
-        root.display()
+        common::toml_basic(root)
     )
 }
 
@@ -84,7 +84,7 @@ fn ab_a_skipped_family_is_left_alone() {
     let skipping = format!(
         "{}[family.\"{}\"]\nskip = true\n",
         evicting(&control),
-        family.display()
+        common::toml_basic(&family)
     );
     fs::write(homes[0].join("swarfr/config.toml"), skipping).unwrap();
 

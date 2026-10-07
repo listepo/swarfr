@@ -41,6 +41,19 @@ fn planned(report: &serde_json::Value) -> Vec<(String, u64)> {
     planned
 }
 
+/// Files the compress pass planned and the backend then refused.
+fn not_compressed(report: &serde_json::Value) -> u64 {
+    report["groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|group| group["passes"].as_array().unwrap())
+        .filter(|pass| pass["name"] == "compress")
+        .flat_map(|pass| pass["skipped"].as_array().unwrap())
+        .filter(|skip| skip["reason"] == "NotCompressed")
+        .count() as u64
+}
+
 #[test]
 fn one_run_leaves_nothing_for_the_next() {
     let fx = Fixture::new();
@@ -50,7 +63,7 @@ fn one_run_leaves_nothing_for_the_next() {
     let state = TempDir::new().unwrap();
     let index = state.path().join("hashes.bin");
 
-    run(&fx, &index, state.path(), &["--across-families"]);
+    let first = run(&fx, &index, state.path(), &["--across-families"]);
     let again = run(
         &fx,
         &index,
@@ -58,9 +71,13 @@ fn one_run_leaves_nothing_for_the_next() {
         &["--across-families", "--dry-run"],
     );
 
+    // A file the run compressed or cloned is not planned again. A file the backend refused
+    // (`NotCompressed`) is tried on the next run: LZNT1 gives up on some object files where
+    // LZFSE does not, and that retry is the limit `DESIGN.md` already names.
+    let refused = not_compressed(&first);
     let left: Vec<_> = planned(&again)
         .into_iter()
-        .filter(|(_, planned)| *planned > 0)
+        .filter(|(name, planned)| *planned > 0 && (*name != "compress" || *planned != refused))
         .collect();
     assert_eq!(left, [] as [(String, u64); 0], "{again:#}");
     fx.assert_fresh(&target);

@@ -1,5 +1,30 @@
 
 
+### T21. Windows: NTFS compression and ReFS block cloning
+
+Compression: NTFS has per-file transparent compression through `FSCTL_SET_COMPRESSION`, and the
+allocated size to measure it with comes from `GetCompressedFileSize`. Dedupe: ReFS has block
+cloning (`FSCTL_DUPLICATE_EXTENTS_TO_FILE`); NTFS has no copy-on-write at all, so dedupe there is
+the hardlink fallback, which needs only `caps` to answer honestly. File identity is the volume
+serial plus a 128-bit file id, and the build lock stays `File::try_lock`.
+
+`windows-sys` is a Windows-only dependency. Done: the pass suite runs on NTFS, NTFS reports no
+block sharing and falls back to hardlinks instead of failing, and paths with drive letters and
+`\\?\` prefixes are covered by tests. ReFS cloning runs when `TEMP` is a ReFS volume.
+
+#### Result
+
+- `src/sys/windows.rs`: `FILE_ID_INFO` (inode widened to `u128`, hash index `DUNIDX03`), link
+  count from `FILE_STANDARD_INFO`, size on disk from `GetCompressedFileSizeW`, LZNT1 via
+  `FSCTL_SET_COMPRESSION`, block clone via `FSCTL_DUPLICATE_EXTENTS_TO_FILE` (returns
+  `Unsupported` and leaves no copy where the volume cannot clone).
+- The compress pass copies bytes where the volume cannot clone. A `rename` blocked by a handle
+  without delete share is `Skip::Busy`. `sys::plain` makes `\\?\`, `C:\` and `C:/` one family
+  key, and git is given those paths.
+- `tests/windows.rs` plus the existing suite, run on this NTFS host. A 256 KiB repeated-byte
+  fixture went from 262144 allocated bytes to 16384; that number is in `docs/bench.md` and is
+  not a workspace bench. WOF stays in `ideas.md`.
+
 ### T37. Monorepo: `seed` every position
 
 `seed::choose` already looks "at the same place inside the sibling checkout", but for one dir

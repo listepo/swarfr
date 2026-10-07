@@ -43,6 +43,7 @@ too slow, see `DESIGN.md`).
 | anyhow | local, `cli` feature | https://github.com/dtolnay/anyhow | Error context in the binary |
 | sha2 | local | https://github.com/RustCrypto/hashes | Content hash for dedupe |
 | applesauce | local, macOS only (`[target.'cfg(target_os = "macos")'.dependencies]`) | https://github.com/Dr-Emann/applesauce | Backend of the compress pass: transparent APFS compression |
+| windows-sys | local, Windows only (`[target.'cfg(windows)'.dependencies]`), features `Win32_Foundation`, `Win32_Storage_FileSystem`, `Win32_System_IO`, `Win32_System_Ioctl` | https://github.com/microsoft/windows-rs | `FSCTL_SET_COMPRESSION` (NTFS LZNT1) and `FSCTL_DUPLICATE_EXTENTS_TO_FILE` (ReFS block cloning) |
 | rayon | local | https://github.com/rayon-rs/rayon | Hash files in parallel |
 | serde | local | https://github.com/serde-rs/serde | Serialize the inventory |
 | serde_json | local | https://github.com/serde-rs/json | `status --json`, `run --json`; cargo's JSON messages in the test oracle |
