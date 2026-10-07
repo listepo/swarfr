@@ -5,5 +5,4 @@
 - T32.1. C and C++: Ninja and Meson
 - T48. macOS caps() overclaims clone/compress on non-APFS volumes
 - T49. Windows lossy passes: README claim vs the held .cargo-lock
-- T51. Align the git-toplevel helper with git-changed-paths
 - T53. Split Session::run's pass construction out of the method
