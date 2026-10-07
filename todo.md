@@ -6,4 +6,4 @@
 - T48. macOS caps() overclaims clone/compress on non-APFS volumes
 - T49. Windows lossy passes: README claim vs the held .cargo-lock
 - T51. Align the git-toplevel helper with git-changed-paths
-- T52. Small fixes: seed mtimes, advise --cargo-home, badge, Session::run split
+- T53. Split Session::run's pass construction out of the method

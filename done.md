@@ -580,3 +580,9 @@ Check: the only `dunnage` reference under `.github/` and `release-plz.toml` on t
 `src/eco/cargo/advise.rs` built the stale-toolchain note from a multi-line string literal that had lost its `\` continuations, so `swarfr advise` printed the sentence with ~18-space gaps wherever a line had wrapped ("…the one cargo uses                  here…"). Every other continuation in the file was intact. Found by the 2026-10-07 audit. Fix: the literal carries proper `\` continuations again.
 Model: ZCode / GLM-5.3 · Status: done 2026-10-07 · Priority: P3 · Complexity: 1 · Files: `src/eco/cargo/advise.rs`
 Check: `cargo test --test advise --test toolchains` — 5 + 3 passed (the toolchains test asserts the note's text).
+
+### T52. Seed mtimes and advise --cargo-home (badge verified, run split deferred)
+
+Two of the four audit items, plus one verification. `src/seed.rs` copied without restoring the source's mtime, so a seeded worktree looked freshly built and cargo rebuilt the units the seeding was for (the engine's swaps restore the same stamp as `restore_meta`); the copy now keeps the source stamp on both the clone and byte-copy paths. `swarfr advise` hardcoded the default cargo home while `status`/`run` took `--cargo-home`; it now takes the same flag with the same bare-flag-means-default semantics. The README's sonarcloud badges still name `listepo_dunnage` — verified against the SonarCloud API (200 for the old key, 404 for a `swarfr` one): the project lives under the old key, so the badges are correct as they are. The `Session::run` pass-construction split moved to T53 when the task was claimed.
+Model: ZCode / GLM-5.3 · Status: done 2026-10-07 · Priority: P3 · Complexity: 2 · Files: `src/seed.rs`, `src/main.rs`, `tests/seed.rs`
+Check: `cargo test --test seed --test advise` — green, including the new mtime assertion in `a_seeded_worktree_reuses_what_it_can`.

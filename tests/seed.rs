@@ -101,6 +101,14 @@ fn a_seeded_worktree_reuses_what_it_can() {
     let (original, copy) = (rlib(&family.source()), rlib(&family.seeded()));
     assert_eq!(fs::read(&original).unwrap(), fs::read(&copy).unwrap());
     assert_eq!(allocated_bytes(&family.seeded()), seeded.bytes);
+    // The copy keeps the source's stamp: one that looks newer makes the
+    // seeded worktree look freshly built, and cargo rebuilds the units the
+    // seeding was for.
+    let stamps = (
+        fs::metadata(&original).unwrap().modified().unwrap(),
+        fs::metadata(&copy).unwrap().modified().unwrap(),
+    );
+    assert_eq!(stamps.0, stamps.1);
 }
 
 #[test]

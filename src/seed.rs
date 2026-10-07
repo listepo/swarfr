@@ -239,6 +239,13 @@ pub fn seed(
                 } else {
                     fs::copy(entry.path(), &to)?;
                 }
+                // Neither path guarantees the stamp: a copy that looks newer than its
+                // source makes the seeded worktree look freshly built, and cargo rebuilds
+                // the units the seeding was for. The engine's swaps restore the same
+                // stamp (`restore_meta`) for the same reason.
+                if let Ok(modified) = metadata.modified() {
+                    fs::File::open(&to)?.set_times(fs::FileTimes::new().set_modified(modified))?;
+                }
                 if seeded.shared_blocks {
                     register(index, entry.path(), &metadata, &to);
                 }

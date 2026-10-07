@@ -63,6 +63,10 @@ enum Cmd {
         /// Print the findings as JSON
         #[arg(long)]
         json: bool,
+        /// Also look at the cargo home's configs and toolchains
+        /// [default: $CARGO_HOME, else ~/.cargo]
+        #[arg(long, value_name = "DIR", num_args = 0..=1, default_missing_value = "")]
+        cargo_home: Option<PathBuf>,
         /// Dirs to search; a target dir itself works too [default: .]
         #[arg(value_name = "ROOT")]
         roots: Vec<PathBuf>,
@@ -242,7 +246,11 @@ fn main() -> ExitCode {
             cargo_home,
             roots,
         } => status(json, all, cargo_home, roots).map(|()| Done::Everything),
-        Cmd::Advise { json, roots } => advise(json, roots).map(|()| Done::Everything),
+        Cmd::Advise {
+            json,
+            roots,
+            cargo_home,
+        } => advise(json, roots, home_flag(cargo_home)).map(|()| Done::Everything),
         Cmd::Run(args) => run(args),
         Cmd::Daemon(cmd) => match cmd {
             DaemonCmd::Run {
@@ -504,10 +512,13 @@ fn print_target(target: &Target, now: u64) {
 }
 
 /// `swarfr advise`: how to print what the session found.
-fn advise(json: bool, roots: Vec<PathBuf>) -> Result<()> {
+fn advise(json: bool, roots: Vec<PathBuf>, cargo_home: Option<PathBuf>) -> Result<()> {
     let roots = roots_or_config(roots)?;
     let session = Session::open(Settings::default());
-    let advice = session.advise(&roots, cargo_home::path(None).as_deref())?;
+    // Advise always reads a cargo home (its findings live there); the flag
+    // only chooses which one. `--cargo-home` bare still means "the default".
+    let home = home_flag(cargo_home).or_else(|| cargo_home::path(None));
+    let advice = session.advise(&roots, home.as_deref())?;
     for warning in &advice.warnings {
         eprintln!("warning: {warning}");
     }
