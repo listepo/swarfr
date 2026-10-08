@@ -22,8 +22,11 @@ use super::{Ecosystem, Guard, Owner, Policy, Sharing};
 
 /// Cargo's per-profile lock file; its presence marks a profile dir.
 pub const LOCK_FILE: &str = ".cargo-lock";
-/// Cargo 1.97+ writes this instead in a `build.build-dir` profile.
+/// Cargo 1.97+ holds this exclusively for the length of a build. A 1.98 `target/debug`
+/// still has [`LOCK_FILE`] too, but only as a shared lock.
 pub const BUILD_LOCK_FILE: &str = ".cargo-build-lock";
+/// Cargo 1.98's exclusive lock on the artifact directory. Not a unit marker.
+pub const ARTIFACT_LOCK_FILE: &str = ".cargo-artifact-lock";
 /// The target dir of a workspace, as cargo names it by default.
 pub const TARGET: &str = "target";
 
@@ -37,8 +40,12 @@ fn is_profile_lock(name: &OsStr) -> bool {
     name == LOCK_FILE || name == BUILD_LOCK_FILE
 }
 
-/// The lock file cargo actually wrote in `unit`. A missing [`BUILD_LOCK_FILE`] is the older
-/// name; neither file is "not a unit".
+fn is_cargo_lock(name: &OsStr) -> bool {
+    is_profile_lock(name) || name == ARTIFACT_LOCK_FILE
+}
+
+/// The lock cargo holds exclusively in `unit`. 1.98 writes all three names; the build lock
+/// is the write lock. Older cargo, and fixtures that only plant [`LOCK_FILE`], have that.
 fn profile_lock(unit: &Path) -> PathBuf {
     let build = unit.join(BUILD_LOCK_FILE);
     if build.exists() {
@@ -113,7 +120,7 @@ impl Ecosystem for Cargo {
     }
 
     fn private(&self, name: &OsStr) -> bool {
-        is_profile_lock(name)
+        is_cargo_lock(name)
     }
 
     /// `incremental/` is a cache of one checkout's build that cargo will not use in another.

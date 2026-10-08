@@ -171,8 +171,11 @@ fn a_link_puts_the_group_on_one_inode_and_keeps_the_later_mtime() {
 #[test]
 fn a_replace_does_not_move_the_profile_last_built() {
     let (_tmp, dir) = profile();
+    let (canon, member) = (dir.join("canon"), dir.join("deps/member"));
+    let mode = fs::metadata(&canon).unwrap().mode() & 0o7777;
+    fs::set_permissions(&member, fs::Permissions::from_mode(mode)).unwrap();
     let old = SystemTime::UNIX_EPOCH + OLD_MTIME;
-    for path in [dir.join("deps"), dir.join("canon"), dir.join(LOCK_FILE)] {
+    for path in [dir.join("deps"), canon, dir.join(LOCK_FILE)] {
         File::open(&path).unwrap().set_modified(old).unwrap();
     }
     let before = cargo::last_built(&dir).unwrap();

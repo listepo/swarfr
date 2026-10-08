@@ -925,36 +925,6 @@ fn git_command(dir: &Path, args: &[OsString]) -> Command {
     cmd
 }
 
-#[cfg(test)]
-mod git_tests {
-    use super::*;
-
-    #[test]
-    fn the_git_helper_never_takes_the_index_lock() {
-        let cmd = git_command(Path::new("."), &["status".into()]);
-        let lock = cmd
-            .get_envs()
-            .find(|(key, _)| key.to_str() == Some("GIT_OPTIONAL_LOCKS"));
-        assert_eq!(
-            lock.and_then(|(_, value)| value.and_then(|value| value.to_str())),
-            Some("0"),
-            "GIT_OPTIONAL_LOCKS=0 must be pinned on every git call"
-        );
-    }
-
-    #[test]
-    fn git_output_is_strict_utf8() {
-        let dir = tempfile::tempdir().unwrap();
-        assert!(git(dir.path(), &["init".into()]).is_ok());
-        let top =
-            git(dir.path(), &["rev-parse".into(), "--show-toplevel".into()]).expect("git answers");
-        assert!(
-            top.ends_with('\n') && Path::new(top.trim_end()).is_absolute(),
-            "raw stdout, trimmed only by callers: {top:?}"
-        );
-    }
-}
-
 /// Every worktree of the repository `dir` is in, canonical.
 fn worktrees(dir: &Path) -> Result<Vec<PathBuf>> {
     let listed = git(
@@ -1040,4 +1010,34 @@ pub fn now_unix() -> u64 {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .map_or(0, |since_epoch| since_epoch.as_secs())
+}
+
+#[cfg(test)]
+mod git_tests {
+    use super::*;
+
+    #[test]
+    fn the_git_helper_never_takes_the_index_lock() {
+        let cmd = git_command(Path::new("."), &["status".into()]);
+        let lock = cmd
+            .get_envs()
+            .find(|(key, _)| key.to_str() == Some("GIT_OPTIONAL_LOCKS"));
+        assert_eq!(
+            lock.and_then(|(_, value)| value.and_then(|value| value.to_str())),
+            Some("0"),
+            "GIT_OPTIONAL_LOCKS=0 must be pinned on every git call"
+        );
+    }
+
+    #[test]
+    fn git_output_is_strict_utf8() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(git(dir.path(), &["init".into()]).is_ok());
+        let top =
+            git(dir.path(), &["rev-parse".into(), "--show-toplevel".into()]).expect("git answers");
+        assert!(
+            top.ends_with('\n') && Path::new(top.trim_end()).is_absolute(),
+            "raw stdout, trimmed only by callers: {top:?}"
+        );
+    }
 }
