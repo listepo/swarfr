@@ -8,6 +8,30 @@ of new worktrees, and opt-in removal of orphaned or idle targets — planned tog
 approaches reinforce each other. Called `cargo-tare` until T42
 and `dunnage` until T46. Design in `DESIGN.md`, measurements in `docs/research.md`.
 
+## Cloud review findings (2026-10-08)
+
+New bugs, dead code and moves from a read-only Cursor cloud review of `main` at `ff84e5f` (agent `bc-16f3d65c-2589-5440-9fe9-dd0f5b59b28b`; full report: `cloud/swarfr.md` in the private `listepo/roadmap` repo). They take ids T54–T66, ordered P0, P1, P2. **confirmed** means seen in the tree or reproduced; **suspected** means plausible from the code but not proven (nothing was run on Windows or macOS). Line numbers are as of the review. None of these is in the task table or `todo.md` yet: to take one, add its row and card the usual way.
+
+| ID | Priority | Kind | Status | Where | Fix |
+| --- | --- | --- | --- | --- | --- |
+| T54 | P1 | bug | confirmed (reproduced) | `src/engine.rs:835-837`; `src/eco/cargo/mod.rs:151-160`; `src/daemon/mod.rs:43-50`, `:136-152`; `src/sys/mod.rs:85-100` | swarfr poisons its own `last_built`: a rename into `deps/` updates that directory's mtime, and `last_built` is the newest child mtime, so a lossless run makes a week-old profile look built now. Idle evict/incremental never trigger and the daemon sees a new build on every visit. Restore the top-level entry mtimes after apply (`probing_in` restores only the profile dir). |
+| T55 | P1 | bug | confirmed (mechanism; no wrong answer shown) | `src/sys/unix.rs:142-164`, `:170-178` | `caps_of` caches the first probe per device: one failed write probe (read-only dir, full disk) stores `Caps::NONE` for the whole filesystem, and a writable first probe makes later read-only units look capable. Do not cache a failed write as a filesystem capability. |
+| T56 | P1 | bug | confirmed (code only) | `src/sys/windows.rs:70-72`, `:92-94`; contract test `src/sys/mod.rs:152-162` | On Windows `caps()` is `NONE` but `clone_file` is `fs::copy` and succeeds, while the contract test needs `Err` when `!caps.clone`. Return `ErrorKind::Unsupported`. Shows up once T24 gives Windows a test run. |
+| T57 | P1 | bug | confirmed | `src/eco/cargo/mod.rs:23-24`, `:126-148` | `profile_dirs` looks only for `.cargo-lock`, but Cargo 1.97+ `build.build-dir` units use `.cargo-build-lock` (MSRV is 1.98). Those dirs are claimed with zero units, so locks, compress, dedupe, evict and seed never run there. Look for `.cargo-build-lock` too. |
+| T58 | P2 | bug | confirmed (reproduced) | `src/inventory.rs:264-266` vs `src/orphans.rs:93-95` | `is_project_gone` treats any `symlink_metadata` error as gone, so an unsearchable project prints `PROJECT GONE`. Check for `NotFound`, as orphans do. |
+| T59 | P2 | bug | confirmed | `src/main.rs:596-606`; `src/seed.rs:24-27`, `:177` | `seed` always prints "that the clones share with it", even when `shared_blocks` is false and the bytes were copied (e.g. ext4). Print the byte-copy case. |
+| T60 | P2 | bug | suspected | `src/sys/mod.rs:62-70`; tools in `src/eco/cmake.rs:68-69`, `src/eco/dotnet.rs:87-88` | `tool_running` matches a tool whose cwd is any ancestor of the unit, so a `make` or `dotnet` running in `$HOME` marks every unit under it busy. Stop the walk at the project/owner. |
+| T61 | P2 | bug | suspected | `src/eco/swiftpm.rs:75-80`; `src/sys/mod.rs:75-83` | The SwiftPM lock path uses swarfr's own temp dir, so a `swift build` started with a different `TMPDIR` is missed; `lock_name` also rewrites only `/`. Use Swift's temp dir, or document the requirement. |
+| T62 | P2 | bug | suspected | `src/engine.rs:150-158`; `src/main.rs:644` | With `--until-settled` (the `run` default), `absorb` adds later rounds' `applied`/`freed_bytes` to `planned` again. Count each inode once. |
+| T63 | P2 | dead code | confirmed | `src/config.rs:136-138` (`Config::skips`); `src/inventory.rs:91-96` (`inventory::discover`); `src/index.rs:135-141` (`HashIndex::len`/`is_empty`) | Used only by tests. Delete them or put them under `#[cfg(test)]` (keep `HashIndex` methods if they are library API). Every `Cargo.toml` dependency is used. |
+| T64 | P2 | move | confirmed | `src/session.rs:882-926` (`git`, `git_command`) → a shared crate such as crates-packages `git-changed-paths` | Its own comment (`:884-887`) says the three copies must not drift (`GIT_OPTIONAL_LOCKS=0`, missing-git error, strict UTF-8). |
+| T65 | P2 | move | confirmed | `last_built` in `src/eco/cargo/mod.rs:151-160` → an `eco` helper | CMake, .NET and SwiftPM call it too (`cmake.rs:63-64`, `dotnet.rs:80-81`, `swiftpm.rs:87-88`). Move it first so T54's fix lands in one place. |
+| T66 | P2 | move | suspected | `scripts/dist-generate.sh`, `scripts/release.sh` → a `pyrlyn/ci` reusable release step | Only if they really are near-copies of the rtok/runa scripts (not verified). `bump.yml` stays local. |
+
+Already tracked here, not added again: deleting a profile while the engine still holds its open `.cargo-lock` (`src/engine.rs:359-361`, `:238-253`, `:509`), which fails on Windows, is T49.
+
+Not added: retargeting `ketch.toml`/`Cargo.toml` URLs to `pyrlyn/swarfr` applies only if the repo moves.
+
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T43 | in progress | P1 | 3 | 95% | Claude Code / opus-5.5 |
