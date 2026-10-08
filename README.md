@@ -1,3 +1,6 @@
+> [!NOTE]
+> This project is under active development. We need "testing volunteers": try it and report what breaks.
+
 # swarfr
 
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=listepo_dunnage&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=listepo_dunnage) [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=listepo_dunnage&metric=coverage)](https://sonarcloud.io/component_measures?id=listepo_dunnage&metric=coverage) [![Tests](https://img.shields.io/sonar/tests/listepo_dunnage?server=https%3A%2F%2Fsonarcloud.io&compact_message)](https://sonarcloud.io/component_measures?id=listepo_dunnage&metric=tests)

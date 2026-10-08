@@ -403,7 +403,12 @@ jobs:
           } >> "$RUNNER_TEMP/notes.txt"
           sed -n '/^## Download sizes$/,$p' "$RUNNER_TEMP/notes.txt" | tee -a "$GITHUB_STEP_SUMMARY"
 
-          gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
+          # Every release is a dev build ([profile.dist] inherits `dev` in Cargo.toml), published
+          # as a prerelease: this repository's decision (scripts/dist-generate.sh).
+          { printf '%s\n%s\n\n' '> [!WARNING]' '> Dev build: compiled with the Cargo `dev` profile (unoptimized, with debug info) and published as a prerelease.'; cat "$RUNNER_TEMP/notes.txt"; } > "$RUNNER_TEMP/notes.dev.txt"
+          mv "$RUNNER_TEMP/notes.dev.txt" "$RUNNER_TEMP/notes.txt"
+
+          gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" --prerelease --title "$ANNOUNCEMENT_TITLE (dev build)" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
 
   announce:
     needs:

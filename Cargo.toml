@@ -48,8 +48,7 @@ trycmd = "1.2.1"
 [package.metadata.dist]
 dist = true
 
-# The profile cargo-dist builds release archives with (T43).
+# The profile cargo-dist builds release archives with (T43): `dev`, so every
+# release is a dev build (unoptimized, debug info, no LTO).
 [profile.dist]
-inherits = "release"
-lto = "thin"
-codegen-units = 1 # the shipped binary is built once; trade build time for size
+inherits = "dev"
