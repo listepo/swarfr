@@ -15,8 +15,6 @@ and `dunnage` until T46. Design in `DESIGN.md`, measurements in `docs/research.m
 | T21 | todo | P2 | 5 | 0% | |
 | T30.1 | todo | P2 | 3 | 0% | |
 | T32.1 | todo | P2 | 2 | 0% | |
-| T48 | todo | P1 | 3 | 0% | |
-| T49 | todo | P2 | 2 | 0% | |
 | T53 | todo | P3 | 2 | 0% | |
 
 Blockers, take these first. **T24** blocks T21: nothing on Windows can be tested without it.
@@ -163,14 +161,6 @@ generator only, because `ninja` and `meson` are not installed here. Settle wheth
 Ninja takes a lock on the build dir, claim Meson build dirs (`meson-private/`, whose
 `coredata.dat` records the source dir), and add the oracle `ninja -n` plans nothing after a
 pass. Needs the creator's approval to install `ninja` and `meson` (brew or mise).
-
-### T48. macOS caps() overclaims clone/compress on non-APFS volumes
-
-`src/sys/macos.rs:62-74` returns `clone: true, compress: true` after only a write test — no `fclonefileat` probe (unlike `unix.rs`'s FICLONE probe) — and `clone_file` is `fs::copy` (`macos.rs:92-94`), which silently byte-copies. On HFS+/exFAT/SMB/FAT volumes, dedupe plans Replace actions whose "clones" are full copies: nothing is freed, disk briefly grows, and `freed_bytes`/`applied` are wrongly reported (`engine.rs:458-465`); the clone contract test (`sys/mod.rs:152-171`) is vacuous there. This contradicts the invariant at `sys/mod.rs:5-7`. Done means: `caps()` probes `fclonefileat` like unix.rs probes FICLONE, and the non-clone path reports honestly.
-
-### T49. Windows lossy passes: README claim vs the held .cargo-lock
-
-README:9-10 says Windows "builds and reports but plans no work", but `orphans`/`evict`/`incremental`/`doc` are not gated on `caps` and plan removals on any platform; and while the engine holds the `.cargo-lock` `File` open (`engine.rs:359`, dropped only at `engine.rs:509`), `remove()` (`engine.rs:245`) deletes the profile dir containing that lock — on Windows a delete-pending open file keeps its directory entry, so the removal fails and the pass reports it skipped. Done means: the README matches reality (lossy passes either work on Windows or are gated off), and the lock is released before destructive removals or the failure is handled deliberately.
 
 ### T53. Split Session::run's pass construction out of the method
 

@@ -11,6 +11,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime};
 
 use swarfr::eco::cargo::{CARGO, LOCK_FILE};
+use swarfr::eco::{Ecosystem, Guard};
 use swarfr::engine::Report;
 use swarfr::model;
 use tempfile::TempDir;
@@ -268,6 +269,17 @@ pub fn fake_profile(target: &Path, name: &str, kib: usize, days: u64) -> PathBuf
         entry.set_modified(built).unwrap();
     }
     profile
+}
+
+/// Exclusive lock on the file cargo holds for a build in `unit`, so a test can look busy.
+pub fn hold_unit_lock(unit: &Path) -> File {
+    let path = match CARGO.guard(unit) {
+        Guard::Lock(path) => path,
+        other => panic!("expected a lock guard, got {other:?}"),
+    };
+    let file = File::options().read(true).write(true).open(path).unwrap();
+    file.lock().unwrap();
+    file
 }
 
 /// `git <args>` in `dir`, with an identity of its own so no user config is needed; must succeed.

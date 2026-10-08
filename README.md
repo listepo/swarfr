@@ -6,10 +6,12 @@ Swarf: the chips and shavings a lathe or a mill throws off — metal cut away, w
 the part. Much of a Cargo `target/` directory is swarf, and `swarfr` sweeps it out — without
 deleting what you still build with and without slowing builds.
 
-Status: early. Every command and pass below works on macOS and Linux; Windows builds and reports
-but plans no work until `T21` in `plan.md`. A step-by-step guide is in `docs/usage.md`; whether
-the same passes fit C++, .NET, Go and other build systems is studied in `docs/ecosystems.md`,
-and the architecture that would carry them, monorepos included, in `docs/architecture.md`.
+Status: early. Lossless `compress` and `dedupe` need a filesystem that can share blocks or
+compress; Windows builds and reports, and the opt-in lossy passes will try to remove there,
+but those two plan no work until `T21` in `plan.md`. A step-by-step guide is in `docs/usage.md`;
+whether the same passes fit C++, .NET, Go and other build systems is studied in
+`docs/ecosystems.md`, and the architecture that would carry them, monorepos included, in
+`docs/architecture.md`.
 
 ## Why
 

@@ -1,5 +1,49 @@
 
 
+### T48. macOS caps() overclaims clone/compress on non-APFS volumes
+
+`caps()` on macOS claimed clone and compress after a write test; `clone_file` was `fs::copy`. A volume that cannot share blocks would plan "clones" that were full copies.
+
+#### Result
+
+- `rustix` is a unix dependency. macOS `clone_file` is `fclonefileat`; `caps` tries that call and sets `compress` to the same bit.
+- Linux caches only a finished probe. A write-fail walks to a same-device ancestor, so a 0555 Go unit does not mark the disk `NONE`.
+- Windows `clone_file` returns `Unsupported` (T24 item 2).
+
+#### Verified
+
+`just check` green on this Linux VM (ext4/overlay: both sides `NONE`). macOS `fclonefileat` is not executed here; the contract test is the same as Linux's FICLONE one.
+
+### T49. Windows lossy passes: README claim vs the held .cargo-lock
+
+README said Windows "plans no work". Lossy passes are not gated on `caps`.
+
+#### Result
+
+- README: lossless `compress`/`dedupe` plan no work until T21; opt-in lossy passes will try to remove on any platform.
+- Held-lock-during-`remove` on Windows stays suspected (T24). `remove` already records a failed `remove_dir_all` as a skip.
+
+#### Verified
+
+Docs only. No Windows VM.
+
+### T54. Confirmed review fixes around last_built, cargo locks, and reports
+
+Replacing a file moved `deps/` mtime, so `last_built` jumped. Other confirmed items: `is_project_gone` any-err, seed always said "clones share", cargo 1.98's `.cargo-build-lock`, absorb leftover double-count, dead `Config::skips`.
+
+#### Result
+
+- `sys::with_dir_mtime` around rename/stage/failed-compress cleanup.
+- `is_project_gone` is `NotFound` only.
+- `print_seeding` names shared blocks only when they are.
+- `profile_dirs` / `guard` / `private` name `.cargo-lock`, `.cargo-build-lock`, and (private only) `.cargo-artifact-lock`. `guard` takes the exclusive build lock when it exists.
+- Later absorb rounds do not count leftovers twice.
+- `Config::skips` removed.
+
+#### Verified
+
+`just check` green. `a_replace_does_not_move_the_profile_last_built`; `profile_dirs_finds_a_build_lock`; `a_manifest_we_cannot_stat_is_not_a_gone_project`; seed/doc busy tests lock via `CARGO.guard`.
+
 ### T37. Monorepo: `seed` every position
 
 `seed::choose` already looks "at the same place inside the sibling checkout", but for one dir

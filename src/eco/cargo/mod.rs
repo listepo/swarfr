@@ -1,6 +1,6 @@
-//! Cargo: target and build dirs tagged by cargo, guarded per profile dir by `.cargo-lock`, and
-//! the cargo home guarded as a whole by `.package-cache`. Also the passes and the reports only
-//! cargo has.
+//! Cargo: target and build dirs tagged by cargo, guarded per profile dir by `.cargo-lock` or
+//! `.cargo-build-lock`, and the cargo home guarded as a whole by `.package-cache`. Also the
+//! passes and the reports only cargo has.
 
 pub mod advise;
 pub mod depinfo;
@@ -22,6 +22,11 @@ use super::{Ecosystem, Guard, Owner, Policy, Sharing};
 
 /// Cargo's per-profile lock file; its presence marks a profile dir.
 pub const LOCK_FILE: &str = ".cargo-lock";
+/// Cargo 1.97+ holds this exclusively for the length of a build. A 1.98 `target/debug`
+/// still has [`LOCK_FILE`] too, but only as a shared lock.
+pub const BUILD_LOCK_FILE: &str = ".cargo-build-lock";
+/// Cargo 1.98's exclusive lock on the artifact directory. Not a unit marker.
+pub const ARTIFACT_LOCK_FILE: &str = ".cargo-artifact-lock";
 /// The target dir of a workspace, as cargo names it by default.
 pub const TARGET: &str = "target";
 
@@ -30,6 +35,25 @@ const CACHEDIR_TAG: &str = "CACHEDIR.TAG";
 const CARGO_TAG_MARK: &str = "created by cargo";
 /// `<target>/<triple>/<profile>/.cargo-lock` is the deepest place a profile lock lives.
 const PROFILE_LOCK_MAX_DEPTH: usize = 3;
+
+fn is_profile_lock(name: &OsStr) -> bool {
+    name == LOCK_FILE || name == BUILD_LOCK_FILE
+}
+
+fn is_cargo_lock(name: &OsStr) -> bool {
+    is_profile_lock(name) || name == ARTIFACT_LOCK_FILE
+}
+
+/// The lock cargo holds exclusively in `unit`. 1.98 writes all three names; the build lock
+/// is the write lock. Older cargo, and fixtures that only plant [`LOCK_FILE`], have that.
+fn profile_lock(unit: &Path) -> PathBuf {
+    let build = unit.join(BUILD_LOCK_FILE);
+    if build.exists() {
+        build
+    } else {
+        unit.join(LOCK_FILE)
+    }
+}
 
 /// Cargo target dirs and `build-dir`s.
 pub struct Cargo;
@@ -92,11 +116,11 @@ impl Ecosystem for Cargo {
     }
 
     fn guard(&self, unit: &Path) -> Guard {
-        Guard::Lock(unit.join(LOCK_FILE))
+        Guard::Lock(profile_lock(unit))
     }
 
     fn private(&self, name: &OsStr) -> bool {
-        name == LOCK_FILE
+        is_cargo_lock(name)
     }
 
     /// `incremental/` is a cache of one checkout's build that cargo will not use in another.
@@ -138,13 +162,14 @@ pub fn profile_dirs(target: &Path) -> io::Result<Vec<PathBuf>> {
         .max_depth(PROFILE_LOCK_MAX_DEPTH);
     for entry in walk {
         let entry = entry?;
-        if entry.file_name() == LOCK_FILE
+        if is_profile_lock(entry.file_name())
             && let Some(parent) = entry.path().parent()
         {
             dirs.push(parent.to_path_buf());
         }
     }
     dirs.sort();
+    dirs.dedup();
     Ok(dirs)
 }
 
