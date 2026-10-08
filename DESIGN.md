@@ -251,7 +251,7 @@ Everything that knows a build system by name is under `src/eco/`, the way everyt
 knows a platform is under `src/sys/`. The engine, the inode model, the index, `seed` and the
 generic passes ask through `eco::Ecosystem`: `claim` (is this dir a build dir), `owner` (the
 project it was built from), `build_dir` (where a project's build goes, for `seed`), `units`,
-`guard`, `private` (never scanned, never copied: `.cargo-lock`), `volatile` (left behind by
+`guard`, `private` (never scanned, never copied: `.cargo-lock` or `.cargo-build-lock`), `volatile` (left behind by
 `seed`: `incremental/`), `last_used` and `policy` (how dedupe may share). `eco::discover` is the
 one walk: every dir is offered to the registry in order, the first claim wins, a claimed dir is
 not entered and `.git` is never entered — so a CMake dir or a whole cargo target that a build
@@ -435,10 +435,12 @@ Not a pass: it runs on its own, before there is anything to shrink.
   with no build dir yet: a project deleted or absent on this branch is left alone. Per position
   the sibling that built it last wins, so two workspaces may come from two checkouts. All
   positions are copied under one run lock. `worktree add` from a checkout root does the same.
-- **The copy is a clone.** `fs::copy` is `clonefile` on APFS, so the new target shares every
-  block with the old one and the volume loses nothing. Dirs are recreated, symlinks are
-  recreated as symlinks, and `incremental/`, `.cargo-lock` and leftover `.swarfr-tmp-` files are
-  left behind: a cache of another checkout's build, a lock that is not ours, and rubbish.
+- **The copy is a clone.** Where `caps` says the filesystem shares blocks, `clone_file`
+  (`fclonefileat` / `FICLONE`) makes the new target share every block with the old one and the
+  volume loses nothing; elsewhere seed falls back to a real copy on its own. Dirs are
+  recreated, symlinks are recreated as symlinks, and `incremental/`, `.cargo-lock`,
+  `.cargo-build-lock` and leftover `.swarfr-tmp-` files are left behind: a cache of another
+  checkout's build, a lock that is not ours, and rubbish.
 - **Under the source's locks.** Every profile dir of the source is locked with
   `ProfileLock::try_guard` on the adapter's guard for the length of the walk; one that a build holds is reported and
   skipped whole, so nothing half-written is ever copied. Exit code 2, as in `run`.
@@ -991,9 +993,11 @@ writes a 64 KiB temp file and tries `FICLONE` into a second one. A table of file
 would get btrfs mounted `nodatacow`, XFS made with `reflink=0` and a bind-mounted ext4 wrong;
 trying does not. Compression is the exception, and it is asked by name — `statfs().f_type`
 against `BTRFS_SUPER_MAGIC` — because there the attempt lies: ext4 accepts `FS_COMPR_FL`, keeps
-it where `lsattr` shows it, and compresses nothing. macOS
-answers true for both without asking (APFS is what every number in `docs/bench.md` came from),
-Windows answers `Caps::NONE` until `T21`.
+it where `lsattr` shows it, and compresses nothing. macOS tries `fclonefileat` the same way
+and treats compression as the same bit (APFS has both; a volume that cannot clone cannot
+compress either). A directory the probe cannot write in walks to a same-device ancestor, so a
+0555 unit does not teach the cache that the disk is inert. Windows answers `Caps::NONE` until
+`T21`.
 
 | | macOS (APFS) | Linux | Windows |
 | --- | --- | --- | --- |
@@ -1001,9 +1005,9 @@ Windows answers `Caps::NONE` until `T21`.
 | link count | `st_nlink` | `st_nlink` | 1 — links are invisible without a handle |
 | size on disk | `st_blocks × 512` | `st_blocks × 512` | logical length |
 | flags | `st_flags` (`UF_COMPRESSED`) | `FS_IOC_GETFLAGS`, masked to `COMPR`, `IMMUTABLE`, `APPEND`, `NOCOW` | `FILE_ATTRIBUTE_*`, masked to the ones that mean something |
-| clone | `fs::copy` → `fclonefileat` | `FICLONE` (btrfs, XFS `reflink=1`, bcachefs) | plain copy |
+| clone | `fclonefileat` | `FICLONE` (btrfs, XFS `reflink=1`, bcachefs) | `Unsupported` until T21 |
 | compress | applesauce (LZFSE) | `FS_COMPR_FL` + rewrite (btrfs) | — |
-| probe | write test only | `FICLONE` and `FS_IOC_SETFLAGS` | none; `Caps::NONE` |
+| probe | `fclonefileat` | `FICLONE` and `FS_IOC_SETFLAGS` | none; `Caps::NONE` |
 
 Two Linux details that are easy to get wrong:
 

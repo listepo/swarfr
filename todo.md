@@ -6,3 +6,4 @@
 - T48. macOS caps() overclaims clone/compress on non-APFS volumes
 - T49. Windows lossy passes: README claim vs the held .cargo-lock
 - T53. Split Session::run's pass construction out of the method
+- T54. Confirmed review fixes: last_built, caps cache, cargo-build-lock, absorb

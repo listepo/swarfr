@@ -59,8 +59,8 @@ T38.1 gives a target dir moved out of its checkout an owner from cargo's dep-inf
 `build.build-dir` (stable since 1.91) has none to give: cargo's absolute `<name>.d` goes to the
 target dir, rustc's `deps/*.d` are relative to the workspace root, fingerprints are
 package-relative, and only `.rmeta` and object debug info name the workspace. Its profile dirs
-also carry `.cargo-build-lock`, not `.cargo-lock` (cargo 1.97), so `profile_dirs` finds no unit
-in one today. Options: pair it with the target dir that holds the absolute dep-info for the same
+also carry `.cargo-build-lock`, not `.cargo-lock` (cargo 1.97). `profile_dirs` / `guard` /
+`private` now name either lock; a `build.build-dir` still has no owner (T38.1). Options: pair it with the target dir that holds the absolute dep-info for the same
 units; a record swarfr writes when `seed`, `worktree add` or the daemon sees a build dir used from
 a workspace; `[owners]` in the config; the build-dir templates (`{workspace-path-hash}`) resolved
 against known workspaces.

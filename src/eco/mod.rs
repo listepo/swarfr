@@ -102,7 +102,7 @@ pub enum Guard {
     /// implemented; the engine refuses it.
     Held,
     /// The build holds this file locked for as long as it writes the unit, and so does this
-    /// tool: cargo's `.cargo-lock`.
+    /// tool: cargo's `.cargo-lock` or `.cargo-build-lock`.
     Lock(PathBuf),
     /// One lock file for many units at once: cargo's `.package-cache` for its home. Held: every
     /// unit under it is worked on. Busy: none of them is.

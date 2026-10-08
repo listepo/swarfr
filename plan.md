@@ -15,9 +15,10 @@ and `dunnage` until T46. Design in `DESIGN.md`, measurements in `docs/research.m
 | T21 | todo | P2 | 5 | 0% | |
 | T30.1 | todo | P2 | 3 | 0% | |
 | T32.1 | todo | P2 | 2 | 0% | |
-| T48 | todo | P1 | 3 | 0% | |
-| T49 | todo | P2 | 2 | 0% | |
+| T48 | in progress | P1 | 3 | 0% | cursor |
+| T49 | in progress | P2 | 2 | 0% | cursor |
 | T53 | todo | P3 | 2 | 0% | |
+| T54 | in progress | P1 | 2 | 0% | cursor |
 
 Blockers, take these first. **T24** blocks T21: nothing on Windows can be tested without it.
 
@@ -168,10 +169,36 @@ pass. Needs the creator's approval to install `ninja` and `meson` (brew or mise)
 
 `src/sys/macos.rs:62-74` returns `clone: true, compress: true` after only a write test — no `fclonefileat` probe (unlike `unix.rs`'s FICLONE probe) — and `clone_file` is `fs::copy` (`macos.rs:92-94`), which silently byte-copies. On HFS+/exFAT/SMB/FAT volumes, dedupe plans Replace actions whose "clones" are full copies: nothing is freed, disk briefly grows, and `freed_bytes`/`applied` are wrongly reported (`engine.rs:458-465`); the clone contract test (`sys/mod.rs:152-171`) is vacuous there. This contradicts the invariant at `sys/mod.rs:5-7`. Done means: `caps()` probes `fclonefileat` like unix.rs probes FICLONE, and the non-clone path reports honestly.
 
+#### Execution plan
+
+1. Depend on `rustix` for all unix, not Linux only, so macOS can call `fclonefileat`.
+2. `macos::clone_file` is `fclonefileat`; a filesystem that cannot share blocks fails instead of writing a second copy.
+3. `macos::caps` writes a probe file and tries that clone; `compress` is the same bit (APFS has both, everything else has neither). A directory we cannot write in walks to a same-device ancestor, the way Linux must for a 0555 Go unit.
+4. Windows `clone_file` returns `Unsupported` (T24 item 2 / the contract test), not `fs::copy`.
+5. Linux's per-device cache stores only a finished probe: a write that failed is not `Caps::NONE` for the whole disk.
+
 ### T49. Windows lossy passes: README claim vs the held .cargo-lock
 
 README:9-10 says Windows "builds and reports but plans no work", but `orphans`/`evict`/`incremental`/`doc` are not gated on `caps` and plan removals on any platform; and while the engine holds the `.cargo-lock` `File` open (`engine.rs:359`, dropped only at `engine.rs:509`), `remove()` (`engine.rs:245`) deletes the profile dir containing that lock — on Windows a delete-pending open file keeps its directory entry, so the removal fails and the pass reports it skipped. Done means: the README matches reality (lossy passes either work on Windows or are gated off), and the lock is released before destructive removals or the failure is handled deliberately.
 
+#### Execution plan
+
+1. README: lossless `compress` / `dedupe` plan no work on Windows until T21; the opt-in lossy passes are not gated on `caps` and will try to remove on any platform.
+2. The held-lock-during-`remove` failure is still only suspected (no Windows VM, T24). `remove` already records a failed `remove_dir_all` as a skip; releasing the lock before a destructive removal waits for a machine that can see the sharing violation.
+
 ### T53. Split Session::run's pass construction out of the method
 
 Split from T52 when it was claimed. `Session::run` (`src/session.rs:549-847`, ~300 lines) mixes request validation, store/go/home resolution, pass construction, grouping and reporting; the pass-construction block (`session.rs:633-694`) would read better as its own function. Done means: the extraction lands with no behavior change and the suite stays green.
+
+### T54. Confirmed review fixes around last_built, cargo locks, and reports
+
+Confirmed on a read of the tree, not a guess: replacing a file moves the parent directory's mtime, and `last_built` is the newest top-level child (`deps/` among them), so a lossless pass makes an idle profile look freshly built. Linux `caps` caches a write-fail as device `NONE`. `is_project_gone` treats any `symlink_metadata` error as gone. `print_seeding` always says the copies share blocks. Cargo 1.97+ profile dirs hold `.cargo-build-lock`, which `profile_dirs` / `guard` / `private` do not name. `PassReport::absorb` adds a later round's applied leftovers to `planned` a second time. `Config::skips` is unused outside its own test. Done means: parent mtimes are restored the way the probe already restores them; the other items match the one-line fixes; the suite stays green.
+
+#### Execution plan
+
+1. `sys::with_dir_mtime` around `rename_over`, `stage_copy`, and a failed compress copy's removal.
+2. `is_project_gone` is `NotFound` only, matching `orphans` under the lock.
+3. `print_seeding` names shared blocks only when `Seeded::shared_blocks` is true.
+4. `BUILD_LOCK_FILE`, `profile_dirs` / `guard` / `private` accept either cargo lock name.
+5. Later `absorb` rounds set `planned` to the unique applied+skipped count, never re-add leftovers.
+6. Drop `Config::skips`.

@@ -596,13 +596,17 @@ fn print_seedings(done: &[session::Seeding], dry_run: bool) -> Result<Done> {
 fn print_seeding(done: &session::Seeding, dry_run: bool) {
     let seeded = &done.seeded;
     let verb = if dry_run { "would copy" } else { "copied" };
+    let bytes = if seeded.shared_blocks {
+        format!("{} that the clones share with it", gib(seeded.bytes))
+    } else {
+        format!("{} written", gib(seeded.bytes))
+    };
     println!(
-        "{} from {}: {verb} {} files and {} symlinks, {} that the clones share with it",
+        "{} from {}: {verb} {} files and {} symlinks, {bytes}",
         done.target.display(),
         seeded.source.display(),
         seeded.files,
         seeded.symlinks,
-        gib(seeded.bytes)
     );
     for dir in &seeded.busy {
         println!("  busy, not copied: {}", dir.display());

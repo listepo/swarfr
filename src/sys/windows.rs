@@ -10,7 +10,7 @@
 
 use super::Caps;
 
-use std::fs::{self, Metadata};
+use std::fs::Metadata;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io;
 use std::os::windows::fs::MetadataExt;
@@ -87,10 +87,14 @@ pub fn symlink(original: &Path, link: &Path) -> io::Result<()> {
     std::os::windows::fs::symlink_file(original, link)
 }
 
-/// A plain copy: NTFS shares no blocks, and ReFS needs `FSCTL_DUPLICATE_EXTENTS_TO_FILE`
-/// (`T21`). Seeding a target still saves the build it would otherwise cost.
-pub fn clone_file(source: &Path, destination: &Path) -> io::Result<()> {
-    fs::copy(source, destination).map(|_| ())
+/// Not a clone: NTFS shares no blocks, and ReFS needs `FSCTL_DUPLICATE_EXTENTS_TO_FILE`
+/// (`T21`). Seeding asks [`caps`] and falls back to `fs::copy` on its own; a silent byte copy
+/// here would make the clone contract test — and the dedupe pass — pretend the bytes were shared.
+pub fn clone_file(_source: &Path, _destination: &Path) -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "block cloning is T21",
+    ))
 }
 
 /// Nothing to drive until `FSCTL_SET_COMPRESSION` is wired up; the compress pass plans no work
