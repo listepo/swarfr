@@ -72,8 +72,9 @@ pub trait Ecosystem: Sync {
     }
 
     /// For [`Guard::Quiet`]: the build tool's process names. One of them running in a unit, or
-    /// in a dir around it, makes the unit busy. Empty: nothing can be checked, so every quiet
-    /// unit is unsure and lossy passes leave it alone.
+    /// in a dir around it up to the project ([`Self::owner`]), makes the unit busy. A tool
+    /// above the project does not. Empty: nothing can be checked, so every quiet unit is
+    /// unsure and lossy passes leave it alone.
     fn tools(&self) -> &'static [&'static str] {
         &[]
     }

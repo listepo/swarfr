@@ -161,9 +161,10 @@ table, `quiet` per group in `--json`):
 
 1. **Process check.** `Ecosystem::tools` names the build tool's processes. A unit is busy —
    skipped, exit code 2 — when one of them has its current dir in the unit, below it, or in a
-   dir around it (`make` in the project root builds into `build/`); a process in a filesystem
-   root counts for nothing. macOS reads `ps` and `lsof`, Linux `/proc`. Where the check cannot
-   run — Windows, or an adapter that names no tool — the unit is *unsure*.
+   dir around it up to the project (`make` in the project root builds into `build/`). A process
+   above the project — `make` in `$HOME` — or in a filesystem root counts for nothing. macOS
+   reads `ps` and `lsof`, Linux `/proc`. Where the check cannot run — Windows, or an adapter
+   that names no tool — the unit is *unsure*.
 2. **Age floor.** Files younger than `engine::QUIET_MIN_AGE` (one day) are left out of the model,
    whatever a pass's own `min-age` says. A unit that had any is unsure.
 3. **Busy files.** A file found in use while it is replaced — `ETXTBSY`, `EBUSY`, a Windows
@@ -786,7 +787,8 @@ locks a file under a name derived from that other path, which the adapter cannot
   guards a part of it. The owner is the project dir; the manifest the project file restore
   recorded as `obj/<project file>.nuget.dgspec.json`, since one dir may hold several.
 - **No lock.** `Guard::Quiet`: the one-day floor, and `dotnet`, `MSBuild` and `VBCSCompiler`
-  as the tools whose current dir makes a unit busy. Worker nodes and the compiler server stay
+  as the tools whose current dir, in the unit or the project, makes a unit busy. A `dotnet`
+  left running in `$HOME` does not. Worker nodes and the compiler server stay
   alive after a build and keep their project busy until they exit; that is the safe side.
 - **Clones only.** MSBuild's `Copy` overwrites a destination in place, which is how its own
   hardlink option corrupts the NuGet cache (dotnet/msbuild#8273). `Sharing::ClonesOnly` makes
