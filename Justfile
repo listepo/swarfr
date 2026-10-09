@@ -5,15 +5,17 @@ check: && swarfr
     cargo check --lib --no-default-features
     cargo test --no-fail-fast
 
-# The other two platforms compile. Only `src/sys/` differs between them, and only a build says
-# so; the tests still run where the machine is. Needs the std of both targets, in the toolchain
-# `rust-toolchain.toml` pins -- without `--toolchain` rustup installs them into the default one
-# and this fails with `E0463: can't find crate for core`:
+# The other platforms compile. Only `src/sys/` differs between them, and only a build says
+# so; the tests still run where the machine is. The Windows suite runs in a Windows 11 ARM
+# guest (`docs/windows.md`), so `aarch64-pc-windows-msvc` is checked here too. Needs the std
+# of these targets, in the toolchain `rust-toolchain.toml` pins -- without `--toolchain` rustup
+# installs them into the default one and this fails with `E0463: can't find crate for core`:
 #   rustup target add --toolchain "$(rustc --version --verbose | sed -n 's/^release: //p')" \
-#       x86_64-unknown-linux-gnu x86_64-pc-windows-msvc
+#       x86_64-unknown-linux-gnu x86_64-pc-windows-msvc aarch64-pc-windows-msvc
 check-cross:
     cargo check --target x86_64-unknown-linux-gnu
     cargo check --target x86_64-pc-windows-msvc
+    cargo check --target aarch64-pc-windows-msvc
 
 # Lossless cleanup of this checkout's cargo target dir (compress + dedupe); never deletes.
 # Uses the installed binary, not `cargo run`: a broken working tree must not wreck its own target.

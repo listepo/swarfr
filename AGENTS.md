@@ -43,3 +43,10 @@ the contract. Measurements that justify the design are in `docs/research.md`.
 - Dependency candidates are listed in `DESIGN.md`.
 - macOS / APFS is the only supported platform for 0.x; keep platform calls behind the backend
   boundary described in `DESIGN.md`.
+
+## Windows tests (T24)
+
+The suite runs in a local Windows 11 ARM virtual machine, not in CI. `docs/windows.md` says how
+to bring the guest up, make the ReFS Dev Drive, and run `just check` with `TEMP` and `TMP` on
+NTFS or on that volume. `just check-cross` only type-checks `x86_64-unknown-linux-gnu`,
+`x86_64-pc-windows-msvc` and `aarch64-pc-windows-msvc`.
