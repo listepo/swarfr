@@ -1,5 +1,6 @@
-# T43. release-plz keeps one "release: vX.Y.Z" pull request open on main; merging it starts the
-# same release as the Bump workflow. dist still builds, tags and publishes.
+# T43. release-plz keeps one "release: vX.Y.Z" pull request open on main (pyrlyn/ci's shared
+# release-plz.yml). Merging it releases nothing; Bump and release ships the merged version.
+# dist still builds, tags and publishes.
 [workspace]
 # The groups of `just changelog`, so the PR's CHANGELOG.md matches the one release.sh writes.
 changelog_config = "cliff.toml"

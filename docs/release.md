@@ -2,19 +2,19 @@
 
 The pipeline is rtok's (T43): [cargo-dist](https://github.com/axodotdev/cargo-dist) builds,
 signs, tags and publishes; [release-plz](https://release-plz.dev) and a **Bump and release**
-workflow decide the version; [`verify.yml`](../.github/workflows/verify.yml) gates both.
+workflow decide the version; [`verify.yml`](../.github/workflows/verify.yml) gates the release.
 
 ## Cutting a release
 
-**Merge the release pull request.** On every push to `main`,
-[`release-plz.yml`](../.github/workflows/release-plz.yml) keeps one pull request titled
-`release: v<version>` open, with the next version in `Cargo.toml` and its `CHANGELOG.md`
-section (the groups of [`cliff.toml`](../cliff.toml), same as `just changelog`). The version is
-a patch bump unless a commit since the last tag says `feat` (minor) or is breaking (major).
-Merging the pull request — merge commit or squash, so the title is a line of the commit message;
-the ` (#123)` GitHub appends when squashing is allowed for — runs `verify.yml` on the merge
-commit, then `scripts/release.sh patch --no-bump`, which dispatches **Release** for the version
-now in `Cargo.toml` and never raises it.
+**Merge the release pull request, then run Bump and release.** On every push to `main`,
+[`release-plz.yml`](../.github/workflows/release-plz.yml) (a thin caller of pyrlyn/ci's shared
+`release-plz.yml`) keeps one pull request titled `release: v<version>` open, with the next
+version in `Cargo.toml` and its `CHANGELOG.md` section (the groups of [`cliff.toml`](../cliff.toml),
+same as `just changelog`). The version is a patch bump unless a commit since the last tag says
+`feat` (minor) or is breaking (major). Merging the pull request releases nothing: the shared
+workflow tags nothing and dispatches nothing, and it holds the next release PR back until the
+merged version is tagged. Run **Bump and release** (below) afterwards: the version in
+`Cargo.toml` is untagged, so it is released as it stands, without a raise.
 
 release-plz reads the `v*` tags to know which version is out (`git_only` in
 [`release-plz.toml`](../release-plz.toml)). rtok runs without it, and its release pull request
@@ -32,8 +32,8 @@ every green run is a release. The preview is local and writes nothing:
 just release patch --dry-run
 ```
 
-Both ways end in the same script and the same workflow, so they cannot disagree on the version.
-Whichever starts it, the release waits on `verify.yml` — `just check` on Linux and macOS and
+Every release goes through the same script and the same workflow, so the version cannot
+disagree. The release waits on `verify.yml` — `just check` on Linux and macOS and
 `just check-cross` for Windows, the gate `ci.yml` runs on every pull request — and a red gate
 means no dispatch, no tag and nothing on the releases page. The gate cannot live inside
 `release.yml`: dist runs `host` when `build-local-artifacts` is `skipped`, which is what a failed
