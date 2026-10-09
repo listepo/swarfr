@@ -20,7 +20,7 @@ New bugs, dead code and moves from a read-only Cursor cloud review of `main` at 
 | T57 | P1 | bug | confirmed | `src/eco/cargo/mod.rs:23-24`, `:126-148` | `profile_dirs` looks only for `.cargo-lock`, but Cargo 1.97+ `build.build-dir` units use `.cargo-build-lock` (MSRV is 1.98). Those dirs are claimed with zero units, so locks, compress, dedupe, evict and seed never run there. Look for `.cargo-build-lock` too. |
 | T58 | P2 | bug | confirmed (reproduced) | `src/inventory.rs:264-266` vs `src/orphans.rs:93-95` | `is_project_gone` treats any `symlink_metadata` error as gone, so an unsearchable project prints `PROJECT GONE`. Check for `NotFound`, as orphans do. |
 | T59 | P2 | bug | confirmed | `src/main.rs:596-606`; `src/seed.rs:24-27`, `:177` | `seed` always prints "that the clones share with it", even when `shared_blocks` is false and the bytes were copied (e.g. ext4). Print the byte-copy case. |
-| T60 | P2 | bug | suspected | `src/sys/mod.rs:62-70`; tools in `src/eco/cmake.rs:68-69`, `src/eco/dotnet.rs:87-88` | `tool_running` matches a tool whose cwd is any ancestor of the unit, so a `make` or `dotnet` running in `$HOME` marks every unit under it busy. Stop the walk at the project/owner. |
+| T60 | P2 | bug | in progress | `src/sys/mod.rs:62-70`; tools in `src/eco/cmake.rs:68-69`, `src/eco/dotnet.rs:87-88` | `tool_running` matches a tool whose cwd is any ancestor of the unit, so a `make` or `dotnet` running in `$HOME` marks every unit under it busy. Stop the walk at the project/owner. |
 | T61 | P2 | bug | suspected | `src/eco/swiftpm.rs:75-80`; `src/sys/mod.rs:75-83` | The SwiftPM lock path uses swarfr's own temp dir, so a `swift build` started with a different `TMPDIR` is missed; `lock_name` also rewrites only `/`. Use Swift's temp dir, or document the requirement. |
 | T62 | P2 | bug | suspected | `src/engine.rs:150-158`; `src/main.rs:644` | With `--until-settled` (the `run` default), `absorb` adds later rounds' `applied`/`freed_bytes` to `planned` again. Count each inode once. |
 | T63 | P2 | dead code | confirmed | `src/config.rs:136-138` (`Config::skips`); `src/inventory.rs:91-96` (`inventory::discover`); `src/index.rs:135-141` (`HashIndex::len`/`is_empty`) | Used only by tests. Delete them or put them under `#[cfg(test)]` (keep `HashIndex` methods if they are library API). Every `Cargo.toml` dependency is used. |
@@ -34,6 +34,7 @@ Not added: retargeting `ketch.toml`/`Cargo.toml` URLs to `pyrlyn/swarfr` applies
 
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
+| T60 | in progress | P2 | 2 | 0% | Cursor cloud |
 | T43 | in progress | P1 | 3 | 95% | Claude Code / opus-5.5 |
 | T24 | todo | P1 | 3 | 0% | |
 | T21 | todo | P2 | 5 | 0% | |
@@ -52,6 +53,22 @@ Where the tasks came from: `ideas.md` read against `docs/usage.md` (what a user 
 today), `docs/ecosystems.md` (which build systems the engine fits — a desk study, so each
 ecosystem task starts with a spike, and a spike that says "not worth it" closes the task with
 that finding in `docs/research.md`) and `docs/architecture.md` (the monorepo tasks T37–T40).
+
+### T60. Quiet units: a build tool above the project is not the build
+
+`tool_running` treats a tool whose current dir is any ancestor of the unit as a build in that
+unit, except a filesystem root. `make` or `dotnet` running in `$HOME` then marks every quiet
+unit under it busy, so lossy passes never run there. The walk stops at the project: the owner
+dir still counts (`make` in the project root builds into `build/`), and nothing above it does.
+
+#### Execution plan
+
+1. `sys::tool_running` takes the project dir. A cwd inside the unit still counts. An ancestor
+   counts only when it is the project or inside it. With no project, ancestors do not count.
+2. The engine passes `eco.owner(unit)` for `Guard::Quiet`. CMake and .NET already name that dir.
+3. Tests: the path predicate (above the project, the project, inside the unit, an out-of-tree
+   build dir, no owner), and a unix run with `sleep` in the project and above it.
+4. The quiet-tier paragraph in `DESIGN.md` names the project as the stop.
 
 ### T43. Release pipeline: GitHub releases with binaries
 
