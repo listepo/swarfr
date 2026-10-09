@@ -1,5 +1,110 @@
 
 
+### T53. Split Session::run's pass construction out of the method
+
+Split from T52 when it was claimed. `Session::run` mixed request validation, store/go/home
+resolution, pass construction, grouping and reporting; the pass-construction block would read
+better as its own function. Done means: the extraction lands with no behavior change and the
+suite stays green.
+
+#### Execution plan
+
+1. Move the block that builds `evict`, `incremental`, `orphans`, `doc` and the filtered
+   pipeline list into `prepare_passes`. It returns those four passes owned; `run` borrows
+   them, with the `compress` and `dedupe` it already built, for the `[&dyn Pass]` slice.
+2. `compress` and `dedupe` stay in `run`: their notes and hash counts are read after the
+   visits, and `dedupe`'s link fallback is set per group.
+3. Keep the three `now_unix()` calls separate, so an idle-day boundary between them behaves
+   as it does now.
+4. No behavior change. `just check` stays green.
+
+#### Result
+
+- `prepare_passes` builds evict, incremental, orphans and doc from the inventory.
+- `PreparedPasses::selected` is the pipeline slice: those four, then compress and dedupe,
+  filtered by the request's pass names. An empty list still means every pass.
+- `Session::run` still builds compress and dedupe, sets ages and sizes, and reads notes and
+  hash counts after the visits.
+
+#### Verified
+
+`just check` green on this Linux VM (`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
+`cargo check --lib --no-default-features`, `cargo test`).
+
+### T60. Quiet units: a build tool above the project is not the build
+
+`tool_running` treats a tool whose current dir is any ancestor of the unit as a build in that
+unit, except a filesystem root. `make` or `dotnet` running in `$HOME` then marks every quiet
+unit under it busy, so lossy passes never run there. The walk stops at the project: the owner
+dir still counts (`make` in the project root builds into `build/`), and nothing above it does.
+
+#### Execution plan
+
+1. `sys::tool_running` takes the project dir. A cwd inside the unit still counts. An ancestor
+   counts only when it is the project or inside it. With no project, ancestors do not count.
+2. The engine passes `eco.owner(unit)` for `Guard::Quiet`. CMake and .NET already name that dir.
+3. Tests: the path predicate (above the project, the project, inside the unit, an out-of-tree
+   build dir, no owner), and a unix run with `sleep` in the project and above it.
+4. The quiet-tier paragraph in `DESIGN.md` names the project as the stop.
+
+#### Result
+
+- `sys::tool_running` takes the project. A cwd inside the unit still counts. An ancestor counts
+  only when it is the project or inside it. With no project, ancestors do not count. A filesystem
+  root still covers nothing.
+- The engine passes `eco.owner(unit)` for `Guard::Quiet`.
+- `DESIGN.md` names the project as the stop for the quiet-tier process check.
+
+#### Verified
+
+`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo check --lib --no-default-features`,
+and `cargo test` green on this Linux VM. `a_tool_above_the_project_does_not_cover_the_unit`;
+`a_build_tool_above_the_project_does_not_make_the_unit_busy`; `a_build_tool_in_the_project_makes_the_unit_busy`.
+
+### T48. macOS caps() overclaims clone/compress on non-APFS volumes
+
+`caps()` on macOS claimed clone and compress after a write test; `clone_file` was `fs::copy`. A volume that cannot share blocks would plan "clones" that were full copies.
+
+#### Result
+
+- `rustix` is a unix dependency. macOS `clone_file` is `fclonefileat`; `caps` tries that call and sets `compress` to the same bit.
+- Linux caches only a finished probe. A write-fail walks to a same-device ancestor, so a 0555 Go unit does not mark the disk `NONE`.
+- Windows `clone_file` returns `Unsupported` (T24 item 2).
+
+#### Verified
+
+`just check` green on this Linux VM (ext4/overlay: both sides `NONE`). macOS `fclonefileat` is not executed here; the contract test is the same as Linux's FICLONE one.
+
+### T49. Windows lossy passes: README claim vs the held .cargo-lock
+
+README said Windows "plans no work". Lossy passes are not gated on `caps`.
+
+#### Result
+
+- README: lossless `compress`/`dedupe` plan no work until T21; opt-in lossy passes will try to remove on any platform.
+- Held-lock-during-`remove` on Windows stays suspected (T24). `remove` already records a failed `remove_dir_all` as a skip.
+
+#### Verified
+
+Docs only. No Windows VM.
+
+### T54. Confirmed review fixes around last_built, cargo locks, and reports
+
+Replacing a file moved `deps/` mtime, so `last_built` jumped. Other confirmed items: `is_project_gone` any-err, seed always said "clones share", cargo 1.98's `.cargo-build-lock`, absorb leftover double-count, dead `Config::skips`.
+
+#### Result
+
+- `sys::with_dir_mtime` around rename/stage/failed-compress cleanup.
+- `is_project_gone` is `NotFound` only.
+- `print_seeding` names shared blocks only when they are.
+- `profile_dirs` / `guard` / `private` name `.cargo-lock`, `.cargo-build-lock`, and (private only) `.cargo-artifact-lock`. `guard` takes the exclusive build lock when it exists.
+- Later absorb rounds do not count leftovers twice.
+- `Config::skips` removed.
+
+#### Verified
+
+`just check` green. `a_replace_does_not_move_the_profile_last_built`; `profile_dirs_finds_a_build_lock`; `a_manifest_we_cannot_stat_is_not_a_gone_project`; seed/doc busy tests lock via `CARGO.guard`.
+
 ### T37. Monorepo: `seed` every position
 
 `seed::choose` already looks "at the same place inside the sibling checkout", but for one dir

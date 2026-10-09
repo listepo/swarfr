@@ -72,8 +72,9 @@ pub trait Ecosystem: Sync {
     }
 
     /// For [`Guard::Quiet`]: the build tool's process names. One of them running in a unit, or
-    /// in a dir around it, makes the unit busy. Empty: nothing can be checked, so every quiet
-    /// unit is unsure and lossy passes leave it alone.
+    /// in a dir around it up to the project ([`Self::owner`]), makes the unit busy. A tool
+    /// above the project does not. Empty: nothing can be checked, so every quiet unit is
+    /// unsure and lossy passes leave it alone.
     fn tools(&self) -> &'static [&'static str] {
         &[]
     }
@@ -102,7 +103,7 @@ pub enum Guard {
     /// implemented; the engine refuses it.
     Held,
     /// The build holds this file locked for as long as it writes the unit, and so does this
-    /// tool: cargo's `.cargo-lock`.
+    /// tool: cargo's `.cargo-lock` or `.cargo-build-lock`.
     Lock(PathBuf),
     /// One lock file for many units at once: cargo's `.package-cache` for its home. Held: every
     /// unit under it is worked on. Busy: none of them is.

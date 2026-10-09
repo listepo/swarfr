@@ -305,7 +305,7 @@ src/main.rs       flags → Request, Report → text / JSON / exit code; `daemon
 src/daemon/       triggers, due times, state file, service units                          (cli)
 src/session.rs    Session, Request, Plan, Control, Observer, Error, the run lock          (lib)
 src/eco/mod.rs    the trait, Claim / Unit / Guard / Policy, the registry, the shared walk
-src/eco/cargo/    CACHEDIR.TAG, profile dirs, .cargo-lock, last_built, incremental, doc,
+src/eco/cargo/    CACHEDIR.TAG, profile dirs, .cargo-lock / .cargo-build-lock, last_built, incremental, doc,
                   toolchains, advise, cargo_home, what seed leaves behind
 src/eco/<name>.rs one file per later adapter
 src/sys/          everything that differs between platforms                          (exists)

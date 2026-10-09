@@ -8,7 +8,7 @@ use std::sync::{Arc, Barrier};
 use std::time::{Duration, SystemTime};
 
 use swarfr::dedupe::{DEFAULT_MIN_SIZE, Dedupe};
-use swarfr::eco::{Ecosystem, Guard, Policy, Sharing};
+use swarfr::eco::{Ecosystem, Guard, Owner, Policy, Sharing};
 use swarfr::engine::{self, Action, Options, Pass, Skip};
 use swarfr::index::HashIndex;
 use swarfr::model::Profile;
@@ -22,8 +22,10 @@ const OLD_MTIME: Duration = Duration::from_secs(1_000_000_000);
 const NO_TOOL: &[&str] = &["swarfr-test-no-such-tool"];
 
 /// A build system with no lock, whose tool runs under the names in `tools`.
+/// `project` is the owner the quiet check stops at; none means ancestors do not count.
 struct Lockless {
     tools: &'static [&'static str],
+    project: Option<PathBuf>,
 }
 
 impl Ecosystem for Lockless {
@@ -38,6 +40,9 @@ impl Ecosystem for Lockless {
     }
     fn tools(&self) -> &'static [&'static str] {
         self.tools
+    }
+    fn owner(&self, _build_dir: &Path) -> Option<Owner> {
+        self.project.clone().map(|project| Owner { project })
     }
     fn policy(&self) -> Policy {
         Policy {
@@ -116,7 +121,10 @@ fn a_file_rewritten_during_a_run_keeps_the_newer_bytes() {
     let index = RefCell::new(HashIndex::load(&tmp.path().join("index.bin")));
     let mut dedupe = Dedupe::new(&index);
     dedupe.min_age = Duration::ZERO;
-    let eco = Lockless { tools: NO_TOOL };
+    let eco = Lockless {
+        tools: NO_TOOL,
+        project: None,
+    };
     start.wait();
     let report = engine::run(
         &[a.clone(), b.clone()],
@@ -141,7 +149,10 @@ fn lossy_passes_leave_a_unit_with_a_young_file_alone() {
     write_old(&a.join("old"), b"built long ago");
     write_old(&b.join("old"), b"built long ago");
     fs::write(a.join("young"), b"maybe still being written").unwrap();
-    let eco = Lockless { tools: NO_TOOL };
+    let eco = Lockless {
+        tools: NO_TOOL,
+        project: None,
+    };
     let opts = Options {
         lossy: vec!["remove-all".into()],
         ..Options::default()
@@ -167,7 +178,10 @@ fn lossy_passes_leave_a_unit_with_a_young_file_alone() {
 fn an_adapter_naming_no_tool_never_gets_a_lossy_pass() {
     let (_tmp, a, _b) = units();
     write_old(&a.join("old"), b"built long ago");
-    let eco = Lockless { tools: &[] };
+    let eco = Lockless {
+        tools: &[],
+        project: None,
+    };
     let opts = Options {
         lossy: vec!["remove-all".into()],
         ..Options::default()
@@ -195,12 +209,15 @@ fn a_build_tool_running_in_the_unit_makes_it_busy() {
         .unwrap();
     // The child is seen once it has become `sleep`.
     let started = Instant::now();
-    while swarfr::sys::tool_running(&a, TOOL) != Some(true)
+    while swarfr::sys::tool_running(&a, TOOL, None) != Some(true)
         && started.elapsed() < Duration::from_secs(5)
     {
         std::thread::sleep(common::POLL);
     }
-    let eco = Lockless { tools: TOOL };
+    let eco = Lockless {
+        tools: TOOL,
+        project: None,
+    };
     let opts = Options {
         lossy: vec!["remove-all".into()],
         ..Options::default()
@@ -214,4 +231,104 @@ fn a_build_tool_running_in_the_unit_makes_it_busy() {
     assert_eq!(report.busy, std::slice::from_ref(&a));
     assert!(report.quiet.is_empty());
     assert!(a.join("old").exists());
+}
+
+/// `home/proj/build`: a project with its build dir inside it, and a dir above the project.
+fn project_unit() -> (TempDir, PathBuf, PathBuf, PathBuf) {
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path().canonicalize().unwrap().join("home");
+    let project = home.join("proj");
+    let build = project.join("build");
+    fs::create_dir_all(&build).unwrap();
+    (tmp, home, project, build)
+}
+
+#[cfg(unix)]
+#[test]
+fn a_build_tool_above_the_project_does_not_make_the_unit_busy() {
+    use std::process::Command;
+    use std::time::Instant;
+
+    const TOOL: &[&str] = &["sleep"];
+    let (_tmp, home, project, build) = project_unit();
+    write_old(&build.join("old"), b"built long ago");
+    let mut tool = Command::new("sleep")
+        .arg("30")
+        .current_dir(&home)
+        .spawn()
+        .unwrap();
+    // Visible once the child has become `sleep` in the dir above the project.
+    let started = Instant::now();
+    while swarfr::sys::tool_running(&home, TOOL, None) != Some(true)
+        && started.elapsed() < Duration::from_secs(5)
+    {
+        std::thread::sleep(common::POLL);
+    }
+    let above = swarfr::sys::tool_running(&home, TOOL, None);
+    let covers = swarfr::sys::tool_running(&build, TOOL, Some(&project));
+    let eco = Lockless {
+        tools: TOOL,
+        project: Some(project),
+    };
+    let opts = Options {
+        lossy: vec!["remove-all".into()],
+        ..Options::default()
+    };
+
+    let report = engine::run(std::slice::from_ref(&build), &[&RemoveAll], &opts, &eco);
+    tool.kill().unwrap();
+    tool.wait().unwrap();
+    let report = report.unwrap();
+
+    assert_eq!(
+        above,
+        Some(true),
+        "the sleep above the project was not visible"
+    );
+    assert_eq!(
+        covers,
+        Some(false),
+        "a tool above the project is not the build"
+    );
+    assert!(report.busy.is_empty(), "{report:?}");
+    assert!(!build.exists(), "{report:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_build_tool_in_the_project_makes_the_unit_busy() {
+    use std::process::Command;
+    use std::time::Instant;
+
+    const TOOL: &[&str] = &["sleep"];
+    let (_tmp, _home, project, build) = project_unit();
+    write_old(&build.join("old"), b"built long ago");
+    let mut tool = Command::new("sleep")
+        .arg("30")
+        .current_dir(&project)
+        .spawn()
+        .unwrap();
+    let started = Instant::now();
+    while swarfr::sys::tool_running(&build, TOOL, Some(&project)) != Some(true)
+        && started.elapsed() < Duration::from_secs(5)
+    {
+        std::thread::sleep(common::POLL);
+    }
+    let eco = Lockless {
+        tools: TOOL,
+        project: Some(project),
+    };
+    let opts = Options {
+        lossy: vec!["remove-all".into()],
+        ..Options::default()
+    };
+
+    let report = engine::run(std::slice::from_ref(&build), &[&RemoveAll], &opts, &eco);
+    tool.kill().unwrap();
+    tool.wait().unwrap();
+    let report = report.unwrap();
+
+    assert_eq!(report.busy, std::slice::from_ref(&build));
+    assert!(report.quiet.is_empty());
+    assert!(build.join("old").exists());
 }

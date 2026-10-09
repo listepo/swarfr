@@ -1,6 +1,6 @@
 //! The lossy `doc` pass on the built fixture. `target/doc` goes, the build graph does not.
 
-use std::fs::{self, File};
+use std::fs;
 use std::path::Path;
 
 use predicates::str::contains;
@@ -93,11 +93,7 @@ fn a_dry_run_lists_the_dir_with_its_size_and_removes_nothing() {
 fn a_target_with_a_running_build_keeps_its_docs() {
     let fixture = documented();
     // What cargo holds for the length of a build.
-    let build = File::options()
-        .write(true)
-        .open(fixture.target().join("debug/.cargo-lock"))
-        .unwrap();
-    build.lock().unwrap();
+    let _build = common::hold_unit_lock(&fixture.target().join("debug"));
 
     run(&fixture, &fixture.root, &["--lossy", "doc"])
         .assert()

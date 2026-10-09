@@ -11,7 +11,7 @@
 #   --dry-run  print the version that would be released and change nothing
 #   --local    make the version commit but neither push nor start the workflow
 #   --no-bump  release the version in Cargo.toml only if it is untagged; never raise it
-#              (release-plz.yml after a merged release PR)
+#              (e.g. after a merged release PR)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

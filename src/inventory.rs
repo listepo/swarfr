@@ -260,10 +260,12 @@ pub fn is_orphaned(project: &Path) -> bool {
 }
 
 /// Whether the manifest that makes `project` a project of `eco` is missing. An adapter with no
-/// manifest never says so.
+/// manifest never says so. Permission or I/O errors are not gone: `orphans` under the lock
+/// already treats those as a reason to keep the target.
 pub fn is_project_gone(eco: &dyn Ecosystem, project: &Path) -> bool {
-    eco.manifest(project)
-        .is_some_and(|manifest| fs::symlink_metadata(manifest).is_err())
+    eco.manifest(project).is_some_and(|manifest| {
+        fs::symlink_metadata(manifest).is_err_and(|error| error.kind() == io::ErrorKind::NotFound)
+    })
 }
 
 /// The git common dir of the repository `project` is in, if it is in one.

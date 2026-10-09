@@ -4,7 +4,7 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use swarfr::eco::cargo::LOCK_FILE;
+use swarfr::eco::cargo::{CARGO, LOCK_FILE};
 use swarfr::inventory::{self, Target};
 use tempfile::TempDir;
 
@@ -198,4 +198,28 @@ fn status_json_is_machine_readable() {
             root.join("b/target").to_str().unwrap()
         ]
     );
+}
+
+#[test]
+fn a_manifest_we_cannot_stat_is_not_a_gone_project() {
+    let (_tmp, root) = root();
+    let project = root.join("proj");
+    fs::create_dir(&project).unwrap();
+    fs::write(project.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+    assert!(!inventory::is_project_gone(&CARGO, &project));
+
+    fs::remove_file(project.join("Cargo.toml")).unwrap();
+    assert!(inventory::is_project_gone(&CARGO, &project));
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::write(project.join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+        fs::set_permissions(&project, fs::Permissions::from_mode(0o000)).unwrap();
+        assert!(
+            !inventory::is_project_gone(&CARGO, &project),
+            "PermissionDenied is not gone"
+        );
+        fs::set_permissions(&project, fs::Permissions::from_mode(0o755)).unwrap();
+    }
 }

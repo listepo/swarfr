@@ -146,18 +146,19 @@ pub struct PassReport {
 
 impl PassReport {
     /// A later round: it adds what it applied, and what it skipped or removed for the first
-    /// time. Planned counts only those, since a group skipped for good is planned every round.
+    /// time. Planned is the unique count of those — a leftover group is planned every round,
+    /// and must not be added again when a later round finally applies it.
     fn absorb(&mut self, round: PassReport) {
         let new_skips: Vec<_> = round
             .skipped
             .into_iter()
             .filter(|(path, _)| !self.skipped.iter().any(|(seen, _)| seen == path))
             .collect();
-        self.planned += round.applied + new_skips.len();
         self.planned_bytes += round.freed_bytes;
         self.applied += round.applied;
         self.freed_bytes += round.freed_bytes;
         self.skipped.extend(new_skips);
+        self.planned = self.planned.max(self.applied + self.skipped.len());
         for removal in round.removals {
             if !self.removals.iter().any(|(seen, _)| *seen == removal.0) {
                 self.removals.push(removal);
@@ -328,17 +329,24 @@ pub fn run_with(
     for dir in dirs {
         let guard = eco.guard(&dir);
         let held = match &guard {
-            Guard::Quiet => match sys::tool_running(&dir, eco.tools()) {
-                Some(true) => false,
-                found => {
-                    if found.is_none() {
-                        unsure.push(dir.clone());
+            Guard::Quiet => {
+                let owner = eco.owner(&dir);
+                match sys::tool_running(
+                    &dir,
+                    eco.tools(),
+                    owner.as_ref().map(|owner| owner.project.as_path()),
+                ) {
+                    Some(true) => false,
+                    found => {
+                        if found.is_none() {
+                            unsure.push(dir.clone());
+                        }
+                        floors.push((dir.clone(), QUIET_MIN_AGE));
+                        report.quiet.push(dir.clone());
+                        true
                     }
-                    floors.push((dir.clone(), QUIET_MIN_AGE));
-                    report.quiet.push(dir.clone());
-                    true
                 }
-            },
+            }
             // Nothing a lossy pass could want is here: the store's own tool evicts from it.
             Guard::Immutable => {
                 unsure.push(dir.clone());
@@ -749,11 +757,17 @@ fn stage_copy(member: &Inode, locked: &[PathBuf]) -> io::Result<Result<PathBuf, 
         return Ok(Err(skip));
     }
     let copy = sibling_temp(&member.paths[0]);
-    if let Err(e) = clone_as(&member.paths[0], &copy, member) {
-        let _ = fs::remove_file(&copy);
-        return Err(e);
-    }
-    Ok(Ok(copy))
+    let parent = copy
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| copy.clone());
+    sys::with_dir_mtime(&parent, || {
+        if let Err(e) = clone_as(&member.paths[0], &copy, member) {
+            let _ = fs::remove_file(&copy);
+            return Err(e);
+        }
+        Ok(Ok(copy))
+    })
 }
 
 /// Swaps a compressed copy in, or removes the copy. Returns the inode now at the paths.
@@ -764,7 +778,10 @@ fn finish_compress(
 ) -> io::Result<Result<Inode, Skip>> {
     let outcome = try_finish_compress(member, copy, locked);
     if !matches!(outcome, Ok(Ok(_))) {
-        let _ = fs::remove_file(copy);
+        let parent = copy.parent().unwrap_or(copy);
+        sys::with_dir_mtime(parent, || {
+            let _ = fs::remove_file(copy);
+        });
     }
     outcome
 }
@@ -807,16 +824,21 @@ fn swap_in(
 }
 
 /// Runs `prepare`, then renames `temp` over `path`; removes `temp` when either step fails.
+/// The parent directory's mtime is put back: `last_built` is the newest top-level child, and
+/// `deps/` is one of those children.
 fn rename_over(
     temp: &Path,
     path: &Path,
     prepare: impl FnOnce() -> io::Result<()>,
 ) -> io::Result<()> {
-    let result = prepare().and_then(|()| fs::rename(temp, path));
-    if result.is_err() {
-        let _ = fs::remove_file(temp);
-    }
-    result
+    let parent = path.parent().unwrap_or(path);
+    sys::with_dir_mtime(parent, || {
+        let result = prepare().and_then(|()| fs::rename(temp, path));
+        if result.is_err() {
+            let _ = fs::remove_file(temp);
+        }
+        result
+    })
 }
 
 /// A hardlink instead of a clone. There is no metadata to restore — the inode is the source's
@@ -875,5 +897,24 @@ mod tests {
         } else {
             assert_ne!(failed(&sharing), Skip::Busy, "EPIPE on unix");
         }
+    }
+
+    #[test]
+    fn a_later_round_does_not_count_leftovers_twice() {
+        let mut total = PassReport {
+            planned: 2,
+            applied: 1,
+            ..PassReport::default()
+        };
+        total.absorb(PassReport {
+            planned: 1,
+            applied: 1,
+            ..PassReport::default()
+        });
+        assert_eq!(
+            (total.planned, total.applied),
+            (2, 2),
+            "a leftover applied later was already in the first planned count"
+        );
     }
 }
