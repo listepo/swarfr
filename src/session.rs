@@ -630,68 +630,8 @@ impl Session {
             (compress.min_size, dedupe.min_size) = (bytes, bytes);
             home_dedupe.min_size = bytes;
         }
-        // The size cap is global, so eviction is decided over everything under the roots at once.
-        let profiles: Vec<ProfileInfo> = inventory
-            .targets
-            .iter()
-            .flat_map(|target| target.profiles.iter().cloned())
-            .collect();
-        let chosen = evict::select(&profiles, now_unix(), request.evict);
-        let mut evict = Evict::new(chosen.clone());
-        if request.evict_whole_target {
-            evict = evict.whole(evict::whole_targets(&inventory.targets, &chosen));
-        }
-        // Cargo keeps `incremental/` for workspace members only, so this costs one plain rebuild.
-        let idle_days = request.incremental_idle_days.unwrap_or(u64::MAX);
-        let incremental = Incremental::new(incremental::select(&profiles, now_unix(), idle_days));
-        // Whole targets of checkouts git no longer registers, and of projects gone for as long
-        // as the request allows; the sources next to them stay.
-        let orphans = Orphans::new(
-            inventory
-                .targets
-                .iter()
-                .filter_map(|target| {
-                    let project = target.project.clone()?;
-                    let reason = if target.orphaned {
-                        orphans::Reason::CheckoutGone
-                    } else if target.project_gone {
-                        orphans::Reason::ProjectGone {
-                            manifest: eco::named(target.ecosystem)?.manifest(&project)?,
-                            idle_days: request.orphans_project_idle_days?,
-                        }
-                    } else {
-                        return None;
-                    };
-                    Some(Orphan {
-                        target: target.root.clone(),
-                        project,
-                        allocated_bytes: target.allocated_bytes,
-                        reason,
-                    })
-                })
-                .collect(),
-            now_unix(),
-        );
-        // `cargo doc` writes this dir again from scratch and no build reads it.
-        let docs = Doc::new(
-            inventory
-                .targets
-                .iter()
-                .filter(|target| target.doc_bytes > 0)
-                .map(|target| Docs {
-                    target: target.root.clone(),
-                    allocated_bytes: target.doc_bytes,
-                })
-                .collect(),
-        );
-        // Pipeline order (`DESIGN.md`): orphans, evict, incremental, doc, compress, dedupe.
-        let all: [&dyn Pass; 6] = [&orphans, &evict, &incremental, &docs, &compress, &dedupe];
-        let passes: Vec<&dyn Pass> = all
-            .into_iter()
-            .filter(|pass| {
-                request.passes.is_empty() || request.passes.iter().any(|name| name == pass.name())
-            })
-            .collect();
+        let prepared = prepare_passes(&inventory, request);
+        let passes = prepared.selected(&compress, &dedupe, &request.passes);
         // One group per family keeps a run's locks inside the repository it is working on. Across
         // families every target is compared with every other — unrelated projects do share
         // artifacts — and the price is that the locks of all of them are held for the whole run.
@@ -1004,6 +944,104 @@ fn nightly_toolchain(dir: &Path) -> bool {
         .current_dir(dir)
         .output()
         .is_ok_and(|out| String::from_utf8_lossy(&out.stdout).contains("nightly"))
+}
+
+/// Evict, incremental, orphans and doc for one run. Compress and dedupe stay with the
+/// caller: it reads their notes and hash counts after the visits, and sets dedupe's link
+/// fallback once per group.
+struct PreparedPasses {
+    evict: Evict,
+    incremental: Incremental,
+    orphans: Orphans,
+    docs: Doc,
+}
+
+impl PreparedPasses {
+    /// Pipeline order (`DESIGN.md`): orphans, evict, incremental, doc, compress, dedupe.
+    /// An empty `names` keeps every pass.
+    fn selected<'a>(
+        &'a self,
+        compress: &'a Compress<'_>,
+        dedupe: &'a Dedupe<'_>,
+        names: &[String],
+    ) -> Vec<&'a dyn Pass> {
+        let all: [&dyn Pass; 6] = [
+            &self.orphans,
+            &self.evict,
+            &self.incremental,
+            &self.docs,
+            compress,
+            dedupe,
+        ];
+        all.into_iter()
+            .filter(|pass| names.is_empty() || names.iter().any(|name| name == pass.name()))
+            .collect()
+    }
+}
+
+/// The pass-construction block of [`Session::run`]. Each pass reads `now_unix` on its own,
+/// as it did inline, so an idle-day boundary between them is unchanged.
+fn prepare_passes(inventory: &Inventory, request: &Request) -> PreparedPasses {
+    // The size cap is global, so eviction is decided over everything under the roots at once.
+    let profiles: Vec<ProfileInfo> = inventory
+        .targets
+        .iter()
+        .flat_map(|target| target.profiles.iter().cloned())
+        .collect();
+    let chosen = evict::select(&profiles, now_unix(), request.evict);
+    let mut evict = Evict::new(chosen.clone());
+    if request.evict_whole_target {
+        evict = evict.whole(evict::whole_targets(&inventory.targets, &chosen));
+    }
+    // Cargo keeps `incremental/` for workspace members only, so this costs one plain rebuild.
+    let idle_days = request.incremental_idle_days.unwrap_or(u64::MAX);
+    let incremental = Incremental::new(incremental::select(&profiles, now_unix(), idle_days));
+    // Whole targets of checkouts git no longer registers, and of projects gone for as long
+    // as the request allows; the sources next to them stay.
+    let orphans = Orphans::new(
+        inventory
+            .targets
+            .iter()
+            .filter_map(|target| {
+                let project = target.project.clone()?;
+                let reason = if target.orphaned {
+                    orphans::Reason::CheckoutGone
+                } else if target.project_gone {
+                    orphans::Reason::ProjectGone {
+                        manifest: eco::named(target.ecosystem)?.manifest(&project)?,
+                        idle_days: request.orphans_project_idle_days?,
+                    }
+                } else {
+                    return None;
+                };
+                Some(Orphan {
+                    target: target.root.clone(),
+                    project,
+                    allocated_bytes: target.allocated_bytes,
+                    reason,
+                })
+            })
+            .collect(),
+        now_unix(),
+    );
+    // `cargo doc` writes this dir again from scratch and no build reads it.
+    let docs = Doc::new(
+        inventory
+            .targets
+            .iter()
+            .filter(|target| target.doc_bytes > 0)
+            .map(|target| Docs {
+                target: target.root.clone(),
+                allocated_bytes: target.doc_bytes,
+            })
+            .collect(),
+    );
+    PreparedPasses {
+        evict,
+        incremental,
+        orphans,
+        docs,
+    }
 }
 
 pub fn now_unix() -> u64 {
