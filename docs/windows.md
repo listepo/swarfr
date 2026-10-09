@@ -34,8 +34,13 @@ describe, then in the clone:
 mise install
 ```
 
-`just check` is the suite. Run it from Git Bash, so `sh` is on `PATH`. The recipe that follows
-the tests is a shell script, and it does nothing when `swarfr` is not installed.
+`just check` is the suite. The recipe that follows the tests is a shell script, and it does
+nothing when `swarfr` is not installed. It needs `sh` on `PATH`. Git for Windows provides it.
+From PowerShell, for this session:
+
+```powershell
+$env:PATH = "C:\Program Files\Git\bin;$env:PATH"
+```
 
 ## NTFS
 

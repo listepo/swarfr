@@ -35,8 +35,13 @@ cd swarfr
 mise install
 ```
 
-`just check` — це набір тестів. Запускати його з Git Bash, щоб `sh` був у `PATH`. Рецепт, який
-іде після тестів, — сценарій оболонки, і він нічого не робить, якщо `swarfr` не встановлено.
+`just check` — це набір тестів. Рецепт, який іде після тестів, — сценарій оболонки, і він
+нічого не робить, якщо `swarfr` не встановлено. Йому потрібен `sh` у `PATH`. Його дає Git for
+Windows. З PowerShell, на цю сесію:
+
+```powershell
+$env:PATH = "C:\Program Files\Git\bin;$env:PATH"
+```
 
 ## NTFS
 
