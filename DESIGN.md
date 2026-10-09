@@ -1050,5 +1050,7 @@ batch costs nothing, and the probe answers the same thing twice, cleans up after
 claims nothing about a directory it cannot read. `tests/caps.rs` states both outcomes for each
 pass and picks by `caps`, so the same test is an assertion on every filesystem: on btrfs the
 twin becomes a clone, on ext4 nothing is planned and nothing is touched. Point `TMPDIR` at a
-mount to choose the side. `just check-cross` compiles both other targets, which is what catches
-a port that stopped building.
+mount to choose the side. `just check-cross` compiles the other targets
+(`x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc`, `aarch64-pc-windows-msvc`), which is what
+catches a port that stopped building. The suite runs on Windows only in the local VM
+(`docs/windows.md`).

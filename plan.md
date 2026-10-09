@@ -35,7 +35,7 @@ Not added: retargeting `ketch.toml`/`Cargo.toml` URLs to `pyrlyn/swarfr` applies
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T43 | in progress | P1 | 3 | 95% | Claude Code / opus-5.5 |
-| T24 | todo | P1 | 3 | 0% | |
+| T24 | in progress | P1 | 3 | 70% | Cursor cloud agent |
 | T21 | todo | P2 | 5 | 0% | |
 | T30.1 | todo | P2 | 3 | 0% | |
 | T32.1 | todo | P2 | 2 | 0% | |
@@ -103,6 +103,20 @@ Done: the existing suite runs on NTFS in the VM and the result is recorded; the 
 test known to fail there (`clone_file` is `fs::copy` where `caps` says no clones — T21's
 analysis, point 2) is fixed by returning `Unsupported`; `AGENTS.md` says how to bring the VM up
 and run the suite on either volume. No FFI in this task.
+
+#### Execution plan
+
+1. The place is a local VM, already decided. Hypervisor: UTM, Windows 11 ARM guest. Nothing in
+   this change installs it. The repository enters the guest by `git clone`, not a shared folder,
+   so the temp directory can sit on NTFS or ReFS.
+2. `just check-cross` also type-checks `aarch64-pc-windows-msvc`. CI installs that std. The
+   suite still does not run in CI.
+3. `clone_file` already returns `Unsupported` (landed with T48). No further change, no FFI.
+4. `docs/windows.md` (and `docs/ru`, `docs/uk`) is the procedure: bring the guest up, make the
+   ReFS Dev Drive from a VHDX, run `just check` with `TEMP` and `TMP` on NTFS or on that volume.
+   `AGENTS.md` points at it.
+5. Record the NTFS `just check` outcome in this card when the guest exists. This environment is
+   Linux and cannot run it. The task stays here until that outcome is written down.
 
 ### T21. Windows: NTFS compression and ReFS block cloning
 

@@ -27,9 +27,9 @@ begin with. It only pays where `seed` is a real copy — ext4, NTFS — and only
 
 T20 was verified in a local lima VM by the creator's choice. A GitHub Actions job that creates a
 btrfs loopback image, mounts it, points `TMPDIR` at it and runs the suite would keep the Linux
-half honest without a VM on hand — the same two-line setup the VM used. Not approved on its own;
-T24 asks the CI-or-VM question again for Windows, and if the answer there is CI, this job rides
-along in the same workflow.
+half honest without a VM on hand — the same two-line setup the VM used. Not approved on its own.
+The creator's answer for T24 is a local Windows VM, not CI (`docs/windows.md`), so this job does
+not ride along with a Windows workflow.
 
 ## Windows: WOF compression instead of `FSCTL_SET_COMPRESSION`
 

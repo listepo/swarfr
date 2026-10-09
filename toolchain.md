@@ -11,7 +11,7 @@ too slow, see `DESIGN.md`).
 | rustc | mise (pin in `rust-toolchain.toml`, mirrored in `mise.toml`) | Build | https://github.com/rust-lang/rust |
 | cargo | mise (with rust) | Build, and the tool under study | https://github.com/rust-lang/cargo |
 | just | mise (pin in `mise.toml`) | `just check`: fmt, clippy, test; the release recipes | https://github.com/casey/just |
-| rust-std for `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc` | `rustup target add --toolchain $(rustc --version --verbose \| sed -n 's/^release: //p') <triple>` — without `--toolchain` rustup installs into the *default* toolchain, not the one `rust-toolchain.toml` pins, and the cross build then fails with `E0463: can't find crate for core` | `just check-cross`: the other two platforms must compile | https://github.com/rust-lang/rust |
+| rust-std for `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc`, `aarch64-pc-windows-msvc` | `rustup target add --toolchain $(rustc --version --verbose \| sed -n 's/^release: //p') <triple>` — without `--toolchain` rustup installs into the *default* toolchain, not the one `rust-toolchain.toml` pins, and the cross build then fails with `E0463: can't find crate for core` | `just check-cross`: the other platforms must compile. The ARM Windows target is the one the suite runs on (`docs/windows.md`) | https://github.com/rust-lang/rust |
 | git-cliff | mise (pin in `mise.toml`) | `CHANGELOG.md` from commit subjects: `just changelog`, `scripts/release.sh`, the release pull request | https://github.com/orhun/git-cliff |
 | cargo-dist | mise, on demand (`scripts/dist-generate.sh` runs the `cargo-dist-version` of `dist-workspace.toml`) | Generates `release.yml`; builds, signs, tags and publishes a release | https://github.com/axodotdev/cargo-dist |
 | release-plz | GitHub Action (`release-plz.yml`) | Keeps the `release: vX.Y.Z` pull request open | https://github.com/release-plz/release-plz |
@@ -24,6 +24,7 @@ too slow, see `DESIGN.md`).
 | go | global (brew), optional | `tests/store.rs`: the `GOCACHE` oracle for `--store`; `tests/go.rs`: `go mod verify` after `run --go`; skipped without it; `docs/bench.md` numbers | https://github.com/golang/go |
 | zip | system (macOS, most Linux distributions), optional | `tests/go.rs`: a module zip for the offline proxy dir, skipped without it | https://infozip.sourceforge.net/Zip.html |
 | lima | global (brew / mise) | A Linux VM with a btrfs loopback image: the only way to test the Linux half from a Mac | https://github.com/lima-vm/lima |
+| UTM | global (brew), optional | A Windows 11 ARM guest: where the suite runs (T24). Not installed by this repository. `docs/windows.md` | https://github.com/utmapp/UTM |
 | ketch | see its README | Installs swarfr | https://github.com/listepo/ketch |
 | swarfr | `ketch` | Lossless cleanup of `target/` after tests | https://github.com/listepo/swarfr |
 

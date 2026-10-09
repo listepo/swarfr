@@ -37,8 +37,8 @@ jobs:
       - run: just check
 
   # The Windows archive is built for real only in release.yml, and the suite runs on Windows
-  # only in a local VM (T24) — so the Windows backend at least has to type-check here, before a
-  # release tries to build it.
+  # only in a local VM (T24, docs/windows.md) — so both Windows backends at least have to
+  # type-check here, before a release tries to build the x86_64 archive.
   cross:
     runs-on: ubuntu-latest
     steps:
@@ -50,5 +50,5 @@ jobs:
       # Into the toolchain rust-toolchain.toml pins, not the default one (see the Justfile).
       - run: |
           rustup target add --toolchain "$(rustc --version --verbose | sed -n 's/^release: //p')" \
-            x86_64-pc-windows-msvc
+            x86_64-pc-windows-msvc aarch64-pc-windows-msvc
       - run: just check-cross
