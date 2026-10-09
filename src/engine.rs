@@ -329,17 +329,24 @@ pub fn run_with(
     for dir in dirs {
         let guard = eco.guard(&dir);
         let held = match &guard {
-            Guard::Quiet => match sys::tool_running(&dir, eco.tools()) {
-                Some(true) => false,
-                found => {
-                    if found.is_none() {
-                        unsure.push(dir.clone());
+            Guard::Quiet => {
+                let owner = eco.owner(&dir);
+                match sys::tool_running(
+                    &dir,
+                    eco.tools(),
+                    owner.as_ref().map(|owner| owner.project.as_path()),
+                ) {
+                    Some(true) => false,
+                    found => {
+                        if found.is_none() {
+                            unsure.push(dir.clone());
+                        }
+                        floors.push((dir.clone(), QUIET_MIN_AGE));
+                        report.quiet.push(dir.clone());
+                        true
                     }
-                    floors.push((dir.clone(), QUIET_MIN_AGE));
-                    report.quiet.push(dir.clone());
-                    true
                 }
-            },
+            }
             // Nothing a lossy pass could want is here: the store's own tool evicts from it.
             Guard::Immutable => {
                 unsure.push(dir.clone());

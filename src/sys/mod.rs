@@ -54,20 +54,37 @@ pub fn caps(dir: &Path) -> Caps {
     imp::caps(dir)
 }
 
-/// Whether a process called one of `tools` works in `dir`: its current dir is `dir`, below it,
-/// or a dir around it — `make` run from the project root builds into `build/`. A process in a
-/// filesystem root says nothing about any dir. `None` when it cannot be told: no tools named, no
-/// process table here, or the platform does not say. Only processes whose current dir this user
-/// may read are seen.
-pub fn tool_running(dir: &Path, tools: &[&str]) -> Option<bool> {
+/// Whether a process called one of `tools` works in `dir`.
+///
+/// Its current dir is `dir` or below it, or a dir around it that is still the project:
+/// `make` run from the project root builds into `build/`. `project` is that root, from the
+/// unit's owner. A process above the project — `make` in `$HOME` — or in a filesystem root
+/// says nothing about the unit. With no project, only a cwd inside the unit counts: an
+/// ancestor walk with nowhere to stop would mark every unit under that cwd busy.
+///
+/// `None` when it cannot be told: no tools named, no process table here, or the platform does
+/// not say. Only processes whose current dir this user may read are seen.
+pub fn tool_running(dir: &Path, tools: &[&str], project: Option<&Path>) -> Option<bool> {
     if tools.is_empty() {
         return None;
     }
     let cwds = imp::tool_cwds(tools)?;
-    Some(
-        cwds.iter()
-            .any(|cwd| cwd.starts_with(dir) || (cwd.parent().is_some() && dir.starts_with(cwd))),
-    )
+    Some(cwds.iter().any(|cwd| cwd_covers(dir, cwd, project)))
+}
+
+/// Whether a process whose current dir is `cwd` is working on `unit`.
+///
+/// Inside the unit, always. An ancestor counts only when it is `project` or inside it, so
+/// `make` in the project root still covers `project/build` and a tool in `$HOME` does not.
+/// A filesystem root covers nothing. No project: ancestors do not count.
+fn cwd_covers(unit: &Path, cwd: &Path, project: Option<&Path>) -> bool {
+    if cwd.starts_with(unit) {
+        return true;
+    }
+    let Some(project) = project else {
+        return false;
+    };
+    cwd.parent().is_some() && unit.starts_with(cwd) && cwd.starts_with(project)
 }
 
 /// The temp dir build tools put their lock files in: `TMPDIR`, else, on macOS, the per-user one
@@ -291,5 +308,37 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(&ro, fs::Permissions::from_mode(0o755)).unwrap();
         }
+    }
+
+    /// `make` in the project root covers `project/build`. `make` in the dir above the project
+    /// does not, and neither does a tool in a filesystem root or an ancestor of an out-of-tree
+    /// build dir.
+    #[test]
+    fn a_tool_above_the_project_does_not_cover_the_unit() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let project = home.join("proj");
+        let unit = project.join("build");
+        fs::create_dir_all(&unit).unwrap();
+
+        assert!(cwd_covers(&unit, &unit, Some(&project)));
+        assert!(cwd_covers(&unit, &unit.join("out"), Some(&project)));
+        assert!(cwd_covers(&unit, &project, Some(&project)));
+        assert!(!cwd_covers(&unit, &home, Some(&project)));
+        assert!(
+            !cwd_covers(&unit, &project, None),
+            "no project: an ancestor is not the build"
+        );
+
+        let out = tmp.path().join("out-of-tree");
+        fs::create_dir_all(&out).unwrap();
+        assert!(cwd_covers(&out, &out, Some(&project)));
+        assert!(!cwd_covers(&out, tmp.path(), Some(&project)));
+
+        #[cfg(unix)]
+        assert!(
+            !cwd_covers(&unit, Path::new("/"), Some(Path::new("/"))),
+            "a filesystem root covers nothing"
+        );
     }
 }

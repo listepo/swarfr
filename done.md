@@ -1,5 +1,35 @@
 
 
+### T60. Quiet units: a build tool above the project is not the build
+
+`tool_running` treats a tool whose current dir is any ancestor of the unit as a build in that
+unit, except a filesystem root. `make` or `dotnet` running in `$HOME` then marks every quiet
+unit under it busy, so lossy passes never run there. The walk stops at the project: the owner
+dir still counts (`make` in the project root builds into `build/`), and nothing above it does.
+
+#### Execution plan
+
+1. `sys::tool_running` takes the project dir. A cwd inside the unit still counts. An ancestor
+   counts only when it is the project or inside it. With no project, ancestors do not count.
+2. The engine passes `eco.owner(unit)` for `Guard::Quiet`. CMake and .NET already name that dir.
+3. Tests: the path predicate (above the project, the project, inside the unit, an out-of-tree
+   build dir, no owner), and a unix run with `sleep` in the project and above it.
+4. The quiet-tier paragraph in `DESIGN.md` names the project as the stop.
+
+#### Result
+
+- `sys::tool_running` takes the project. A cwd inside the unit still counts. An ancestor counts
+  only when it is the project or inside it. With no project, ancestors do not count. A filesystem
+  root still covers nothing.
+- The engine passes `eco.owner(unit)` for `Guard::Quiet`.
+- `DESIGN.md` names the project as the stop for the quiet-tier process check.
+
+#### Verified
+
+`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo check --lib --no-default-features`,
+and `cargo test` green on this Linux VM. `a_tool_above_the_project_does_not_cover_the_unit`;
+`a_build_tool_above_the_project_does_not_make_the_unit_busy`; `a_build_tool_in_the_project_makes_the_unit_busy`.
+
 ### T48. macOS caps() overclaims clone/compress on non-APFS volumes
 
 `caps()` on macOS claimed clone and compress after a write test; `clone_file` was `fs::copy`. A volume that cannot share blocks would plan "clones" that were full copies.

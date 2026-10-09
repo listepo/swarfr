@@ -1,7 +1,7 @@
 //! The build dirs of the last walk (`build-dirs-v1.json`): when a run uses them instead of
 //! walking the roots, and when it walks again.
 
-use std::fs;
+use std::fs::{self, File, FileTimes};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -109,8 +109,15 @@ fn other_roots_a_moved_root_or_no_cadence_walk_again() {
     assert!(fx.plan(&roots, HOUR, false).walked, "other roots again");
     assert!(!fx.plan(&roots, HOUR, false).walked);
 
-    // A new entry in the root itself moves its mtime.
+    // A new entry in the root itself moves its mtime. The stamp is set explicitly: a
+    // filesystem may not publish that new mtime until its timestamp grain ticks, and the
+    // list would then still hold.
     fake_target(&fx.root, "c", 16, 0);
+    let bumped = fs::metadata(&fx.root).unwrap().modified().unwrap() + Duration::from_secs(1);
+    File::open(&fx.root)
+        .unwrap()
+        .set_times(FileTimes::new().set_modified(bumped))
+        .unwrap();
     let moved = fx.plan(&roots, HOUR, false);
     assert!(moved.walked);
     assert_eq!(groups(&moved).len(), 2);
