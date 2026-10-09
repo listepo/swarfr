@@ -1,5 +1,36 @@
 
 
+### T53. Split Session::run's pass construction out of the method
+
+Split from T52 when it was claimed. `Session::run` mixed request validation, store/go/home
+resolution, pass construction, grouping and reporting; the pass-construction block would read
+better as its own function. Done means: the extraction lands with no behavior change and the
+suite stays green.
+
+#### Execution plan
+
+1. Move the block that builds `evict`, `incremental`, `orphans`, `doc` and the filtered
+   pipeline list into `prepare_passes`. It returns those four passes owned; `run` borrows
+   them, with the `compress` and `dedupe` it already built, for the `[&dyn Pass]` slice.
+2. `compress` and `dedupe` stay in `run`: their notes and hash counts are read after the
+   visits, and `dedupe`'s link fallback is set per group.
+3. Keep the three `now_unix()` calls separate, so an idle-day boundary between them behaves
+   as it does now.
+4. No behavior change. `just check` stays green.
+
+#### Result
+
+- `prepare_passes` builds evict, incremental, orphans and doc from the inventory.
+- `PreparedPasses::selected` is the pipeline slice: those four, then compress and dedupe,
+  filtered by the request's pass names. An empty list still means every pass.
+- `Session::run` still builds compress and dedupe, sets ages and sizes, and reads notes and
+  hash counts after the visits.
+
+#### Verified
+
+`just check` green on this Linux VM (`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
+`cargo check --lib --no-default-features`, `cargo test`).
+
 ### T60. Quiet units: a build tool above the project is not the build
 
 `tool_running` treats a tool whose current dir is any ancestor of the unit as a build in that

@@ -3,4 +3,3 @@
 - T21. Windows: NTFS compression and ReFS block cloning
 - T30.1. Swift: Xcode DerivedData
 - T32.1. C and C++: Ninja and Meson
-- T53. Split Session::run's pass construction out of the method

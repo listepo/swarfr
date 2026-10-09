@@ -39,7 +39,6 @@ Not added: retargeting `ketch.toml`/`Cargo.toml` URLs to `pyrlyn/swarfr` applies
 | T21 | todo | P2 | 5 | 0% | |
 | T30.1 | todo | P2 | 3 | 0% | |
 | T32.1 | todo | P2 | 2 | 0% | |
-| T53 | in progress | P3 | 2 | 0% | Cursor |
 
 Blockers, take these first. **T24** blocks T21: nothing on Windows can be tested without it.
 
@@ -185,18 +184,3 @@ generator only, because `ninja` and `meson` are not installed here. Settle wheth
 Ninja takes a lock on the build dir, claim Meson build dirs (`meson-private/`, whose
 `coredata.dat` records the source dir), and add the oracle `ninja -n` plans nothing after a
 pass. Needs the creator's approval to install `ninja` and `meson` (brew or mise).
-
-### T53. Split Session::run's pass construction out of the method
-
-Split from T52 when it was claimed. `Session::run` (`src/session.rs:549-847`, ~300 lines) mixes request validation, store/go/home resolution, pass construction, grouping and reporting; the pass-construction block (`session.rs:633-694`) would read better as its own function. Done means: the extraction lands with no behavior change and the suite stays green.
-
-#### Execution plan
-
-1. Move the block that builds `evict`, `incremental`, `orphans`, `doc` and the filtered
-   pipeline list into `prepare_passes`. It returns those four passes owned; `run` borrows
-   them, with the `compress` and `dedupe` it already built, for the `[&dyn Pass]` slice.
-2. `compress` and `dedupe` stay in `run`: their notes and hash counts are read after the
-   visits, and `dedupe`'s link fallback is set per group.
-3. Keep the three `now_unix()` calls separate, so an idle-day boundary between them behaves
-   as it does now.
-4. No behavior change. `just check` stays green.
