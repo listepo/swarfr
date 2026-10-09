@@ -2,7 +2,7 @@
 //! through applesauce, which is what the tool was measured on.
 
 use std::cell::RefCell;
-use std::fs::{self, Metadata, Permissions};
+use std::fs::{self, File, Metadata, Permissions};
 use std::io;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -53,23 +53,32 @@ pub fn flags(_path: &Path, meta: &Metadata) -> u32 {
 }
 
 /// APFS clones and compresses, and it is what every measurement in `docs/bench.md` was taken
-/// on; the probe only asks whether the directory can be written to at all, because a capability
-/// nothing can be tried in is not one we may claim.
-///
-// ponytail: an HFS+ or SMB volume on a Mac would get `true` here and lose the dedupe pass its
-// gain (`fs::copy` falls back to a byte copy silently). Call `fclonefileat` on a probe file the
-// way `unix.rs` calls `FICLONE` if such a volume ever turns up in a benchmark.
+/// on. The probe tries `fclonefileat` rather than trusting the volume name: HFS+, exFAT, SMB
+/// and FAT accept a write and then `fs::copy` silently writes a second copy of the bytes.
+/// Compression is the same bit — APFS has both, and a volume that cannot clone cannot compress
+/// either. A directory we cannot write in walks up the same device, so a 0555 unit still
+/// answers for the filesystem it sits on.
 pub fn caps(dir: &Path) -> Caps {
+    for ancestor in super::same_device_dirs(dir) {
+        if let Some(caps) = try_probe(&ancestor) {
+            return caps;
+        }
+    }
+    Caps::NONE
+}
+
+fn try_probe(dir: &Path) -> Option<Caps> {
     super::probing_in(dir, || {
-        let probe = super::probe_path(dir);
-        if fs::write(&probe, b"swarfr").is_err() {
-            return Caps::NONE;
-        }
-        let _ = fs::remove_file(&probe);
-        Caps {
-            clone: true,
-            compress: true,
-        }
+        let source = super::probe_path(dir);
+        let copy = super::probe_path(dir);
+        let wrote = fs::write(&source, b"swarfr").is_ok();
+        let clone = wrote && clone_file(&source, &copy).is_ok();
+        let _ = fs::remove_file(&source);
+        let _ = fs::remove_file(&copy);
+        wrote.then_some(Caps {
+            clone,
+            compress: clone,
+        })
     })
 }
 
@@ -85,12 +94,26 @@ pub fn symlink(original: &Path, link: &Path) -> io::Result<()> {
     std::os::unix::fs::symlink(original, link)
 }
 
-/// A copy that shares its blocks with the source until one of them is written.
-// ponytail: `fs::copy` clones through `fclonefileat` on APFS and quietly falls back to a byte
-// copy elsewhere (correct, just saves nothing). Call `fclonefileat` via rustix if a silent
-// fallback ever needs to be an error.
+/// `fclonefileat`, not `fs::copy`: a volume that cannot share blocks must fail here rather than
+/// write a second copy of them quietly. The callers that want a copy either way — seeding a new
+/// worktree — fall back on their own.
 pub fn clone_file(source: &Path, destination: &Path) -> io::Result<()> {
-    fs::copy(source, destination).map(|_| ())
+    let Some(name) = destination.file_name() else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "clone destination has no file name",
+        ));
+    };
+    let Some(dir) = destination.parent() else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "clone destination has no parent",
+        ));
+    };
+    let source = File::open(source)?;
+    let dir = File::open(dir)?;
+    rustix::fs::fclonefileat(&source, &dir, name, rustix::fs::CloneFlags::empty())?;
+    Ok(())
 }
 
 /// The applesauce backend, kept alive between batches, with what it refused and why.

@@ -1,11 +1,11 @@
 //! `swarfr seed` on a real `git worktree` of the cargo fixture. Everything is in temp dirs.
 
-use std::fs::{self, File};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use predicates::str::contains;
-use swarfr::eco::cargo::{CARGO, LOCK_FILE};
+use swarfr::eco::cargo::{ARTIFACT_LOCK_FILE, BUILD_LOCK_FILE, CARGO, LOCK_FILE};
 use swarfr::index::HashIndex;
 use swarfr::seed;
 use tempfile::TempDir;
@@ -127,7 +127,13 @@ fn the_cache_and_the_lock_files_are_left_behind() {
     .unwrap();
 
     assert!(!family.seeded().join("debug/incremental").exists());
-    assert!(!family.seeded().join("debug").join(LOCK_FILE).exists());
+    let seeded_debug = family.seeded().join("debug");
+    for name in [LOCK_FILE, BUILD_LOCK_FILE, ARTIFACT_LOCK_FILE] {
+        assert!(
+            !seeded_debug.join(name).exists(),
+            "seed must not copy cargo's {name}"
+        );
+    }
     assert!(family.seeded().join("CACHEDIR.TAG").is_file());
 }
 
@@ -176,11 +182,7 @@ fn a_busy_source_profile_is_reported_and_not_copied() {
     let mut index = nowhere(&family.worktree_ws);
     let profile = family.source().join("debug");
     // What cargo holds for the length of a build.
-    let build = File::options()
-        .write(true)
-        .open(profile.join(LOCK_FILE))
-        .unwrap();
-    build.lock().unwrap();
+    let _build = common::hold_unit_lock(&profile);
 
     let seeded = seed::seed(
         &family.worktree_ws,

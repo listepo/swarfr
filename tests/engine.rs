@@ -10,7 +10,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
 use swarfr::eco::cargo;
-use swarfr::eco::cargo::{CARGO, LOCK_FILE};
+use swarfr::eco::cargo::{BUILD_LOCK_FILE, CARGO, LOCK_FILE};
+use swarfr::eco::{Ecosystem, Guard};
 use swarfr::engine::{
     self, Action, Interrupt, Interrupted, Options, Pass, Replace, Report, Share, Skip,
 };
@@ -163,6 +164,35 @@ fn a_link_puts_the_group_on_one_inode_and_keeps_the_later_mtime() {
         "the shared inode keeps the later time, for both names"
     );
     assert!(model::scan(&dir, &CARGO).unwrap().stale_temps.is_empty());
+}
+
+/// `last_built` is the newest top-level child of the profile. Replacing a file inside `deps/`
+/// moves that directory's mtime; without putting it back, an idle profile looks freshly built.
+#[test]
+fn a_replace_does_not_move_the_profile_last_built() {
+    let (_tmp, dir) = profile();
+    let (canon, member) = (dir.join("canon"), dir.join("deps/member"));
+    let mode = fs::metadata(&canon).unwrap().mode() & 0o7777;
+    fs::set_permissions(&member, fs::Permissions::from_mode(mode)).unwrap();
+    let old = SystemTime::UNIX_EPOCH + OLD_MTIME;
+    for path in [dir.join("deps"), canon, dir.join(LOCK_FILE)] {
+        File::open(&path).unwrap().set_modified(old).unwrap();
+    }
+    let before = cargo::last_built(&dir).unwrap();
+    assert_eq!(before, OLD_MTIME.as_secs());
+
+    let pass = FnPass {
+        lossy: false,
+        plan: |p: &[Profile]| share_by_name(p, "canon", "member", Share::Link),
+    };
+    let report = run(&dir, &[&pass], &Options::default());
+
+    assert_eq!(report.passes[0].applied, 1, "{report:?}");
+    assert_eq!(
+        cargo::last_built(&dir).unwrap(),
+        before,
+        "renaming inside deps/ must not make the profile look freshly built"
+    );
 }
 
 /// Modes are not negotiable: the fixture's member is `0o640` and `canon` is not, and one inode
@@ -359,6 +389,19 @@ fn profile_dirs_refuses_a_dir_cargo_did_not_tag() {
     assert!(cargo::profile_dirs(target).is_err(), "someone else's tag");
     fs::write(target.join("CACHEDIR.TAG"), "# tag created by cargo.").unwrap();
     assert_eq!(cargo::profile_dirs(target).unwrap(), [dir.as_path()]);
+}
+
+#[test]
+fn profile_dirs_finds_a_build_lock() {
+    let tmp = TempDir::new().unwrap();
+    let target = tmp.path().join("build");
+    let dir = target.join("debug");
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(target.join("CACHEDIR.TAG"), "# tag created by cargo.").unwrap();
+    File::create(dir.join(BUILD_LOCK_FILE)).unwrap();
+
+    assert_eq!(cargo::profile_dirs(&target).unwrap(), [dir.as_path()]);
+    assert_eq!(CARGO.guard(&dir), Guard::Lock(dir.join(BUILD_LOCK_FILE)));
 }
 
 // --- a real cargo build ---

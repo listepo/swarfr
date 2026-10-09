@@ -9,9 +9,9 @@
 //! It is a question about a filesystem, not about a platform, so it is answered per directory
 //! and cached per device. On Linux the answer is found by trying: btrfs and XFS with
 //! `reflink=1` share blocks and ext4 does not, but so does btrfs mounted `nodatacow` and XFS
-//! with `reflink=0`, which no table of filesystem names gets right. macOS answers `true` for
-//! both without asking, because APFS is what the tool was measured on. Windows answers `false`
-//! for both until `T21`.
+//! with `reflink=0`, which no table of filesystem names gets right. macOS tries `fclonefileat`
+//! the same way, and treats compression as the same bit: APFS has both and the volumes that
+//! cannot clone cannot compress either. Windows answers `false` for both until `T21`.
 
 #[cfg_attr(target_os = "macos", path = "macos.rs")]
 #[cfg_attr(all(unix, not(target_os = "macos")), path = "unix.rs")]
@@ -54,20 +54,37 @@ pub fn caps(dir: &Path) -> Caps {
     imp::caps(dir)
 }
 
-/// Whether a process called one of `tools` works in `dir`: its current dir is `dir`, below it,
-/// or a dir around it — `make` run from the project root builds into `build/`. A process in a
-/// filesystem root says nothing about any dir. `None` when it cannot be told: no tools named, no
-/// process table here, or the platform does not say. Only processes whose current dir this user
-/// may read are seen.
-pub fn tool_running(dir: &Path, tools: &[&str]) -> Option<bool> {
+/// Whether a process called one of `tools` works in `dir`.
+///
+/// Its current dir is `dir` or below it, or a dir around it that is still the project:
+/// `make` run from the project root builds into `build/`. `project` is that root, from the
+/// unit's owner. A process above the project — `make` in `$HOME` — or in a filesystem root
+/// says nothing about the unit. With no project, only a cwd inside the unit counts: an
+/// ancestor walk with nowhere to stop would mark every unit under that cwd busy.
+///
+/// `None` when it cannot be told: no tools named, no process table here, or the platform does
+/// not say. Only processes whose current dir this user may read are seen.
+pub fn tool_running(dir: &Path, tools: &[&str], project: Option<&Path>) -> Option<bool> {
     if tools.is_empty() {
         return None;
     }
     let cwds = imp::tool_cwds(tools)?;
-    Some(
-        cwds.iter()
-            .any(|cwd| cwd.starts_with(dir) || (cwd.parent().is_some() && dir.starts_with(cwd))),
-    )
+    Some(cwds.iter().any(|cwd| cwd_covers(dir, cwd, project)))
+}
+
+/// Whether a process whose current dir is `cwd` is working on `unit`.
+///
+/// Inside the unit, always. An ancestor counts only when it is `project` or inside it, so
+/// `make` in the project root still covers `project/build` and a tool in `$HOME` does not.
+/// A filesystem root covers nothing. No project: ancestors do not count.
+fn cwd_covers(unit: &Path, cwd: &Path, project: Option<&Path>) -> bool {
+    if cwd.starts_with(unit) {
+        return true;
+    }
+    let Some(project) = project else {
+        return false;
+    };
+    cwd.parent().is_some() && unit.starts_with(cwd) && cwd.starts_with(project)
 }
 
 /// The temp dir build tools put their lock files in: `TMPDIR`, else, on macOS, the per-user one
@@ -82,22 +99,58 @@ pub fn temp_dir() -> std::path::PathBuf {
     std::env::temp_dir()
 }
 
-/// Runs a probe inside `dir` and puts the directory's modification time back afterwards.
+/// Runs `op` and puts `dir`'s modification time back afterwards.
 ///
-/// Creating and removing a file changes the mtime of the directory it is in, and that mtime is
-/// how `evict` and `incremental` tell a profile nobody has built for a week from one built this
-/// morning. A probe that moved it would make every target look freshly built — found exactly
-/// that way, by the incremental test on btrfs.
+/// Creating, renaming or removing a file changes the mtime of the directory it is in, and that
+/// mtime is how `last_built`, `evict` and `incremental` tell a profile nobody has built for a
+/// week from one built this morning. A replace or a probe that moved it would make every target
+/// look freshly built — found exactly that way, by the incremental test on btrfs. Restoring a
+/// directory mtime on Windows needs `FILE_FLAG_BACKUP_SEMANTICS` (T21); until then this is a
+/// no-op there.
 #[cfg(not(windows))]
-fn probing_in<T>(dir: &Path, probe: impl FnOnce() -> T) -> T {
+pub(crate) fn with_dir_mtime<T>(dir: &Path, op: impl FnOnce() -> T) -> T {
     let before = std::fs::metadata(dir).and_then(|meta| meta.modified());
-    let found = probe();
+    let found = op();
     if let Ok(mtime) = before
         && let Ok(handle) = std::fs::File::open(dir)
     {
         let _ = handle.set_times(std::fs::FileTimes::new().set_modified(mtime));
     }
     found
+}
+
+#[cfg(windows)]
+pub(crate) fn with_dir_mtime<T>(_dir: &Path, op: impl FnOnce() -> T) -> T {
+    op()
+}
+
+/// Runs a probe inside `dir` and puts the directory's modification time back afterwards.
+#[cfg(not(windows))]
+fn probing_in<T>(dir: &Path, probe: impl FnOnce() -> T) -> T {
+    with_dir_mtime(dir, probe)
+}
+
+/// `dir` and each parent on the same device, nearest first. A probe that cannot write where it
+/// was asked still answers for the filesystem, so a 0555 Go module-cache unit does not teach
+/// the cache that the disk cannot clone.
+#[cfg(unix)]
+fn same_device_dirs(dir: &Path) -> Vec<std::path::PathBuf> {
+    use std::os::unix::fs::MetadataExt;
+    let Ok(start) = std::fs::metadata(dir) else {
+        return Vec::new();
+    };
+    let dev = start.dev();
+    let mut out = Vec::new();
+    for ancestor in dir.ancestors() {
+        let Ok(meta) = std::fs::metadata(ancestor) else {
+            break;
+        };
+        if meta.dev() != dev {
+            break;
+        }
+        out.push(ancestor.to_path_buf());
+    }
+    out
 }
 
 /// A name for a probe file inside `dir`, unique per process and call. It carries the engine's
@@ -231,5 +284,61 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
 
         assert_eq!(caps(&tmp.path().join("nothing-here")), Caps::NONE);
+    }
+
+    /// A unit the owner cannot write in still sits on a filesystem. The first ask must not
+    /// teach the per-device cache that the whole disk is inert.
+    #[test]
+    fn a_read_only_directory_still_answers_for_its_filesystem() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let ro = tmp.path().join("ro");
+        fs::create_dir(&ro).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&ro, fs::Permissions::from_mode(0o555)).unwrap();
+        }
+
+        let from_ro = caps(&ro);
+        let from_rw = caps(tmp.path());
+
+        assert_eq!(from_ro, from_rw, "a 0555 unit sits on the same filesystem");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&ro, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    /// `make` in the project root covers `project/build`. `make` in the dir above the project
+    /// does not, and neither does a tool in a filesystem root or an ancestor of an out-of-tree
+    /// build dir.
+    #[test]
+    fn a_tool_above_the_project_does_not_cover_the_unit() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let project = home.join("proj");
+        let unit = project.join("build");
+        fs::create_dir_all(&unit).unwrap();
+
+        assert!(cwd_covers(&unit, &unit, Some(&project)));
+        assert!(cwd_covers(&unit, &unit.join("out"), Some(&project)));
+        assert!(cwd_covers(&unit, &project, Some(&project)));
+        assert!(!cwd_covers(&unit, &home, Some(&project)));
+        assert!(
+            !cwd_covers(&unit, &project, None),
+            "no project: an ancestor is not the build"
+        );
+
+        let out = tmp.path().join("out-of-tree");
+        fs::create_dir_all(&out).unwrap();
+        assert!(cwd_covers(&out, &out, Some(&project)));
+        assert!(!cwd_covers(&out, tmp.path(), Some(&project)));
+
+        #[cfg(unix)]
+        assert!(
+            !cwd_covers(&unit, Path::new("/"), Some(Path::new("/"))),
+            "a filesystem root covers nothing"
+        );
     }
 }

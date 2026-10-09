@@ -38,7 +38,7 @@ too slow, see `DESIGN.md`).
 | Package | Where | Source | Why here |
 | --- | --- | --- | --- |
 | clap | local, `cli` feature | https://github.com/clap-rs/clap | CLI parsing |
-| rustix | local, Linux only (`[target.'cfg(target_os = "linux")'.dependencies]`) | https://github.com/bytecodealliance/rustix | `FICLONE` and `FS_IOC_GET/SETFLAGS` without hand-written `unsafe` |
+| rustix | local, unix (`[target.'cfg(unix)'.dependencies]`) | https://github.com/bytecodealliance/rustix | `FICLONE` and `FS_IOC_GET/SETFLAGS` on Linux, `fclonefileat` on macOS, without hand-written `unsafe` |
 | walkdir | local | https://github.com/BurntSushi/walkdir | Walk a profile dir without following symlinks or leaving the device |
 | anyhow | local, `cli` feature | https://github.com/dtolnay/anyhow | Error context in the binary |
 | sha2 | local | https://github.com/RustCrypto/hashes | Content hash for dedupe |

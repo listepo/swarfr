@@ -34,13 +34,13 @@ jobs:
       contents: read
       actions: write # cancel-run on failure, required by pyrlyn/ci ci-rust.yml
     with:
-      # The shared matrix minus Windows (type-checked by `cross` below).
+      # The shared matrix minus Windows (type-checked by `cross` below). macOS runs on
+      # `xcode-27`: the shared workflow selects Xcode 27, and macos-latest ships Xcode 26.
       matrix: >-
         [
         {"os": "ubuntu-latest", "target": "x86_64-unknown-linux-gnu"},
         {"os": "ubuntu-24.04-arm", "target": "aarch64-unknown-linux-gnu"},
-        {"os": "macos-latest", "target": "aarch64-apple-darwin"},
-        {"os": "macos-latest", "target": "x86_64-apple-darwin"}
+        {"os": "xcode-27", "target": "aarch64-apple-darwin"}
         ]
       test-command: |
         cargo check --lib --no-default-features

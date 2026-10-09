@@ -132,10 +132,6 @@ impl Config {
             source,
         })
     }
-
-    pub fn skips(&self, family: &Path) -> bool {
-        self.family.get(family).is_some_and(|family| family.skip)
-    }
 }
 
 /// `$XDG_CONFIG_HOME/swarfr/config.toml`, else `$HOME/.config/swarfr/config.toml`.
@@ -209,8 +205,18 @@ mod tests {
         assert_eq!(config.evict.max_total_gib, Some(50));
         assert_eq!(config.incremental.idle_days, Some(7));
         assert_eq!(config.index.idle_days, Some(90));
-        assert!(config.skips(Path::new("/a/repo")));
-        assert!(!config.skips(Path::new("/a/other")));
+        assert!(
+            config
+                .family
+                .get(Path::new("/a/repo"))
+                .is_some_and(|family| family.skip)
+        );
+        assert!(
+            !config
+                .family
+                .get(Path::new("/a/other"))
+                .is_some_and(|family| family.skip)
+        );
         let mono = &config.family[Path::new("/a/mono")];
         assert_eq!(mono.skip_paths, [PathBuf::from("vendor")]);
         assert_eq!(mono.ecosystems.as_deref(), Some(&["cargo".to_owned()][..]));

@@ -145,33 +145,43 @@ fn cache() -> &'static Mutex<HashMap<u64, Caps>> {
 }
 
 /// The cached answer for a device, probed inside `near` on the first ask. `near` is a path on
-/// that device: a directory to probe in, or a file whose parent is one.
+/// that device: a directory to probe in, or a file whose parent is one. A write that failed is
+/// not an answer about the device — a 0555 unit walks to a writable ancestor, and only a
+/// finished probe is stored.
 fn caps_of(dev: u64, near: &Path) -> Caps {
     if let Ok(cache) = cache().lock()
         && let Some(caps) = cache.get(&dev)
     {
         return *caps;
     }
-    let dir = if near.is_dir() {
+    let start = if near.is_dir() {
         near
     } else {
         near.parent().unwrap_or(near)
     };
-    let caps = probe(dir);
-    if let Ok(mut cache) = cache().lock() {
+    let mut found = None;
+    for dir in super::same_device_dirs(start) {
+        if let Some(caps) = try_probe(&dir) {
+            found = Some(caps);
+            break;
+        }
+    }
+    let caps = found.unwrap_or(Caps::NONE);
+    if found.is_some()
+        && let Ok(mut cache) = cache().lock()
+    {
         cache.insert(dev, caps);
     }
     caps
 }
 
-/// Two temp files, one `FICLONE` and one `FS_IOC_SETFLAGS`, both removed again. A probe that
-/// cannot be written at all answers [`Caps::NONE`]: a read-only or full filesystem is not one
-/// the passes could write to either.
-fn probe(dir: &Path) -> Caps {
+/// Two temp files, one `FICLONE` and one `FS_IOC_SETFLAGS`, both removed again. `None` when
+/// the directory cannot be written at all: that is not [`Caps::NONE`] for the device.
+fn try_probe(dir: &Path) -> Option<Caps> {
     super::probing_in(dir, || {
         let source = super::probe_path(dir);
         let copy = super::probe_path(dir);
-        let caps = probe_with(&source, &copy).unwrap_or(Caps::NONE);
+        let caps = probe_with(&source, &copy).ok();
         let _ = fs::remove_file(&source);
         let _ = fs::remove_file(&copy);
         caps
