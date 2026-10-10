@@ -231,8 +231,11 @@ fn swift_build_waits_for_the_lock_the_adapter_names() {
     held.unlock().unwrap();
     let done = waiting.wait_with_output().unwrap();
     assert!(done.status.success(), "{done:?}");
-    let said = String::from_utf8_lossy(&done.stdout) + String::from_utf8_lossy(&done.stderr);
-    assert!(said.contains("Another instance of SwiftPM"), "{said}");
+    // Not the wording of the wait message ("Another instance of SwiftPM is already running ..."
+    // up to Swift 6.3, different or absent on 6.4): it is a diagnostic, and it changes between
+    // releases. What the lock guards is the behaviour: the build stays blocked while the lock
+    // is held (above), and runs to the end once it is released.
+    assert!(package.join(".build/debug/app").exists(), "{done:?}");
 }
 
 #[test]
