@@ -1,5 +1,6 @@
 # Mirrors rust-toolchain.toml for mise users; keep the two in sync.
 [tools]
+swift = "6.4.0" # SwiftPM adapter tests (tests/swiftpm.rs) run real `swift build`; 6.4 is what Xcode 27 ships, the CI macOS image
 rust = { version = "1.98", components = "rustfmt,clippy" }
 # Release tooling (T43), same pins as rtok. CI installs these through mise-action; cargo-dist
 # is not pinned here (CI would build it from source on every run) — `cargo-dist-version` in
